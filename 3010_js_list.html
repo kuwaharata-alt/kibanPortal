@@ -1,0 +1,514 @@
+<script>
+/** ===== 案件一覧ロード（ここが唯一の入口） ===== */
+async function loadCases_(){
+    if(!AppState.loginUser){
+    await fetchLoginUser_();
+  }
+  const st = window.AppState;
+
+  const pageSizeEl   = document.getElementById('pageSize');
+  const qEl          = document.getElementById('q');
+  const hideClosedEl = document.getElementById('hideClosed');
+
+  st.pageSize = Number(pageSizeEl?.value || '200');
+  const q = qEl?.value || '';
+  const hideClosed = !!hideClosedEl?.checked;
+
+  // ★ multiple 対応：選択された担当者を配列で取る（全員なら []）
+  const members = getSelectedMembers_();
+
+  setErr('');
+  setMeta('通信中...');
+
+  google.script.run
+    .withSuccessHandler(p => {
+      if (!p?.ok) { setErr('通信失敗'); setMeta(''); return; }
+
+      setMeta(`${st.type} 管理表 読込中...`);
+
+      google.script.run
+        .withSuccessHandler(res => {
+          if (!res?.ok) { setErr(res?.error || '取得失敗'); setMeta(''); return; }
+
+          st.headers  = res.headers || [];
+          st.rows     = res.rows || [];
+          st.total    = Number(res.total || 0);
+          st.page     = Number(res.page || 1);
+          st.pageSize = Number(res.pageSize || st.pageSize);
+
+          st.keyHeader      = res.keyHeader || '見積番号';
+          st.customerHeader = res.customerHeader || '案件名';
+          st.statusHeader   = res.statusHeader || 'ステータス';
+          st.statusNote   = res.statusNote || '備考';
+
+          st.headerIndex = {};
+          st.headers.forEach((h,i)=>{ if(h) st.headerIndex[h]=i; });
+
+          setMeta('');
+
+          // ★ renderCases_ を直接呼ぶ（存在チェック付き）
+          if (typeof window.renderCases_ === 'function') window.renderCases_(true);
+          else if (typeof window.renderCases === 'function') window.renderCases(true);
+          else setErr('renderCases が未定義です');
+        })
+        .withFailureHandler(err => { setErr('api_list failure: ' + String(err)); setMeta(''); })
+        // ★ ここだけ呼ぶ：api_list に members を渡す
+        .api_list({ type: st.type, q, hideClosed, page: st.page, pageSize: st.pageSize, members });
+    })
+    .withFailureHandler(err => { setErr('api_ping failure: ' + String(err)); setMeta(''); })
+    .api_ping();
+}
+
+/** ===== 描画は AppState を参照するだけ ===== */
+function buildHeader_(){
+  const st = window.AppState;
+  const thead = document.getElementById('thead');
+  if (!thead) return;
+
+  thead.innerHTML = '';
+
+  const thAct = document.createElement('th');
+  thAct.textContent = '操作';
+  thAct.classList.add('col-act');
+  thead.appendChild(thAct);
+
+  for (const h of st.headers) {
+    const th = document.createElement('th');
+    th.textContent = h || '';
+    thead.appendChild(th);
+  }
+}
+
+function renderCases_(rebuildHeader){
+  const st = window.AppState;
+  if (rebuildHeader) buildHeader_();
+
+  const tbody = document.getElementById('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const idxKey = st.headerIndex[st.keyHeader];
+  const idxCustomer = st.headerIndex[st.customerHeader];
+  const idxBiko = st.headerIndex[st.statusNote];
+
+  for (const row of st.rows) {
+    const tr = document.createElement('tr');
+
+    const tdAct = document.createElement('td');
+    tdAct.classList.add('col-act');
+
+    const key = String(row[idxKey] ?? '').trim();
+    const customer = String(row[idxCustomer] ?? '').trim();
+
+    // 操作
+    const btnView = document.createElement('button');
+    btnView.textContent = '詳細';
+    btnView.onclick = () => openView?.(key,customer);
+
+    const btnStatus = document.createElement('button');
+    btnStatus.textContent = '更新';    
+    btnStatus.onclick = () => openStatus?.(key,customer);
+    
+    if (!key) { btnView.disabled = true; btnStatus.disabled = true; }
+
+    tdAct.append(btnView, btnStatus);
+    tr.appendChild(tdAct);
+    for (let i=0; i<st.headers.length; i++){
+      const td = document.createElement('td');
+      const header = st.headers[i];
+      const v = (row[i] == null) ? '' : String(row[i]);
+
+      if (header === 'ステータス') {
+        td.classList.add('status-cell');
+        td.innerHTML = renderStatusCellHtml2Lines_(v);
+        tr.appendChild(td);
+        continue;
+      }
+
+      if (header === '作業期間') {
+        td.innerHTML = v || '';
+        td.classList.add('td-work-period');
+        tr.appendChild(td);
+        continue;
+      }
+
+
+      if (header === '備考') {
+        const note = (idxBiko == null) ? '' : (row[idxBiko] == null ? '' : String(row[idxBiko]));
+        const html = noteToCardsHtml_(note);
+
+        td.innerHTML = html || escapeHtml(note).replaceAll('\n','<br>');
+        td.style.whiteSpace = 'normal';
+        tr.appendChild(td);
+        continue;
+      }
+
+      td.textContent = v;
+      tr.appendChild(td);
+    }
+
+    tbody.appendChild(tr);
+  }
+
+  // 件数
+  const countEl = document.getElementById('count');
+  const pageInfoEl = document.getElementById('pageInfo');
+  if (countEl) {
+    const start = (st.total === 0) ? 0 : ((st.page - 1) * st.pageSize + 1);
+    const end = Math.min(st.total, (st.page - 1) * st.pageSize + st.rows.length);
+    countEl.textContent = (st.total === 0) ? '表示 0件' : `表示 ${start}-${end} / 全${st.total}件`;
+  }
+  if (pageInfoEl) {
+    const maxPage = Math.max(1, Math.ceil(st.total / st.pageSize));
+    pageInfoEl.textContent = `${st.page} / ${maxPage}`;
+  }
+}
+
+function switchStatusTab(tab){
+  const modal = document.getElementById('modalStatus');
+  if(!modal) return;
+
+  modal.dataset.tab = tab;
+
+  // tab button active
+  document.querySelectorAll('#stTabs .st-tab').forEach(b=>{
+    b.classList.toggle('is-active', b.dataset.tab === tab);
+  });
+
+  // panel show/hide
+  const pStatus = document.getElementById('stPanelStatus');
+  const pInput  = document.getElementById('stPanelInput');
+  if(pStatus) pStatus.classList.toggle('is-hidden', tab !== 'status');
+  if(pInput)  pInput.classList.toggle('is-hidden',  tab !== 'input');
+
+  // footer buttons
+  const btnSt = document.getElementById('saveStatus');
+  const btnIn = document.getElementById('btnInputSave');
+  if(btnSt) btnSt.classList.toggle('is-hidden', tab !== 'status');
+  if(btnIn) btnIn.classList.toggle('is-hidden', tab !== 'input');
+
+  // エラー欄の出し分け（必要なら）
+  const stErr = document.getElementById('stErr');
+  const inErr = document.getElementById('inErr');
+  if(stErr) stErr.style.display = (tab==='status') ? '' : 'none';
+  if(inErr) inErr.style.display = (tab==='input') ? '' : 'none';
+}
+
+function normalizeSummaryState_(s){
+  s = String(s || '')
+    .replace(/\u3000/g, ' ')           // 全角スペース
+    .replace(/[✔️⏸️🔅❌]/g, '')        // アイコン除去
+    .replace(/[()（）]/g, '')          // 括弧（雑に）
+    .replace(/対応有|固定/g, '')       // UIラベル除去
+    .trim();
+
+  if (!s) return '未着手';
+  if (s === 'ー' || s === '-' || s === '—') return 'ー';
+  if (s.includes('対応無')) return 'ー';
+  if (s.includes('完了')) return '完了';
+  if (s.includes('未着手')) return '未着手';
+  if (s.includes('未入荷')) return '未着手';
+
+  // それ以外は対応中
+  return '対応中';
+}
+
+/** ===== ステータス文字列をパースしてMap化 =====
+ * 例: "社内作業：未着手\n現地作業：完了\nドキュメント：対応中"
+ * -> { "社内作業": "未着手", "現地作業": "完了", "ドキュメント": "対応中" }
+ */
+
+
+/** ===== 案件ST用の色分け（要件の3種を想定） ===== */
+
+function caseStToClass_(caseSt){
+  const t = String(caseSt || '');
+  if(t.includes('アサイン中')) return 'status-pill status-assing';
+  if(t.includes('事前確認中')) return 'status-pill status-ad-con';
+  if(t.includes('作業対応中')) return 'status-pill status-doingH';
+  if(t.includes('CLOSE'))   return 'status-pill status-done';
+  return 'status-pill';
+}
+
+function stateToClass_(state){
+  state = String(state || '').trim();
+  if (state === '完了') return 'status-pill status-done';
+  if (state === '対応中') return 'status-pill status-doing';
+  if (state === '未着手') return 'status-pill status-todo';
+  if (state === 'ー') return 'status-pill status-na';
+  return 'status-pill'; // 保険
+}
+
+function initMemberSelect_(){
+  return new Promise((resolve, reject)=>{
+    google.script.run
+      .withSuccessHandler(res=>{
+        try{
+          if(!res || !res.ok) return reject(res?.error || 'member list failed');
+
+          const dd = document.getElementById('memberDD');
+          const menu = document.getElementById('memberMenu');
+          const btn  = document.getElementById('memberBtn');
+          if(!dd || !menu || !btn){ resolve(true); return; }
+
+          menu.innerHTML = '';
+
+          const list = res.list || [];
+
+          // 全員（固定）
+          menu.appendChild(buildMemberCheck_('__ALL__', '全員', true));
+
+          // メンバー
+          list.forEach(name=>{
+            menu.appendChild(buildMemberCheck_(name, name, false));
+          });
+
+          // 初期表示
+          updateMemberLabel_();
+          resolve(true);
+        }catch(e){ reject(e); }
+      })
+      .withFailureHandler(err=>reject(err))
+      .api_getMemberList();
+  });
+}
+
+function buildMemberCheck_(value, label, checked){
+  const div = document.createElement('div');
+  div.className = 'dd-item';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = value;
+  cb.checked = checked;
+  cb.onchange = ()=>{
+    // 全員排他
+    if(cb.value === '__ALL__' && cb.checked){
+      document.querySelectorAll('#memberMenu input[type="checkbox"]').forEach(x=>{
+        if(x.value !== '__ALL__') x.checked = false;
+      });
+    }else if(cb.value !== '__ALL__' && cb.checked){
+      const all = document.querySelector('#memberMenu input[value="__ALL__"]');
+      if(all) all.checked = false;
+    }
+
+    updateMemberLabel_();
+    loadCases_(); // 変更したら再検索
+  };
+
+  const sp = document.createElement('span');
+  sp.textContent = label;
+
+  div.append(cb, sp);
+  return div;
+}
+
+function getSelectedMembers_(){
+  const cbs = [...document.querySelectorAll('#memberMenu input[type="checkbox"]')];
+  const checked = cbs.filter(x=>x.checked).map(x=>x.value);
+
+  // 未選択 or 全員 → 全員扱い
+  if(checked.length === 0 || checked.includes('__ALL__')) return [];
+
+  return checked;
+}
+
+function updateMemberLabel_(){
+  const btn = document.getElementById('memberBtn');
+  const out = document.getElementById('memberSelected');
+
+  const members = getSelectedMembers_();
+  if(members.length === 0){
+    if(btn) btn.textContent = '全員';
+    if(out) out.textContent = '';
+    return;
+  }
+
+  // ボタンは短く、横に全表示
+  if(btn) btn.textContent = `選択中(${members.length})`;
+  if(out) out.textContent = members.join(' / ');
+}
+
+function toggleMemberDD_(ev){
+  ev?.stopPropagation?.();
+  const dd = document.getElementById('memberDD');
+  if(!dd) return;
+  dd.classList.toggle('is-open');
+}
+
+// 外側クリックで閉じる
+document.addEventListener('click', ()=>{
+  document.getElementById('memberDD')?.classList.remove('is-open');
+});
+document.getElementById('memberDD')?.addEventListener('click', (e)=>e.stopPropagation());
+
+function getCell_(row, headerIndex, name){
+  const idx = headerIndex?.[name];
+  if(idx == null) return '';
+  return (row[idx] == null) ? '' : String(row[idx]).trim();
+}
+
+function toState_(raw){
+  const s = String(raw || '').trim();
+  if(!s) return '未着手';
+
+  // “対応有/固定” みたいなのは状態じゃないので無視（未着手扱い）
+  if(s.includes('対応有')) return '未着手';
+
+  if(s === 'ー' || s.includes('対応無')) return 'ー';
+  if(s.includes('完了')) return '完了';
+  if(s.includes('未着手') || s.includes('未入荷')) return '未着手';
+  if(s.includes('対応中')) return '対応中';
+
+  // 保険：知らない値は “対応中” にせず未着手寄り
+  return '未着手';
+}
+
+function docStateFromRow_(row, headerIndex){
+  const a = toState_(getCell_(row, headerIndex, 'ドキュメント_作成'));
+  const b = toState_(getCell_(row, headerIndex, 'ドキュメント_レビュー'));
+
+  // 両方 “対応無” なら対応無
+  if(a === 'ー' && b === 'ー') return 'ー';
+  // 両方完了なら完了
+  if(a === '完了' && b === '完了') return '完了';
+  // どちらか対応中なら対応中
+  if(a === '対応中' || b === '対応中') return '対応中';
+  // それ以外は未着手
+  return '未着手';
+}
+
+
+function renderStatusCellHtml2Lines_(v){
+  const lines = String(v || '').split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!lines.length) return '';
+
+  // 1行目：案件ST：xxx
+  const line1 = lines[0] || '';
+  const clsCase = caseStToClass_(line1);
+
+  // 2行目～：社内：xxx 現地：xxx Doc.：xxx
+  const subLines = lines.slice(1).map(s => String(s || '').trim()).filter(Boolean);
+
+  const chipsSub = subLines.map(p => {
+    const m = p.match(/^(.*?：)(.+)$/);
+    if (!m) {
+      return `<div class="status-pill-row"><span class="status-pill status-pill-mini">${escapeHtml(p)}</span></div>`;
+    }
+
+    const label = m[1];
+    const raw   = m[2];
+
+    const st  = normalizeSummaryState_(raw);
+    const cls = stateToClass_(st);
+    const ico = iconOnlyFromState_(st);
+
+    return `<div class="status-pill-row"><span class="${cls} status-pill-mini">${escapeHtml(label)}${ico}</span></div>`;
+  }).join('');
+
+  return `
+    <div class="status-wrap2">
+      <div class="status-main">
+        <span class="${clsCase} status-pill-main">${escapeHtml(line1)}</span>
+      </div>
+      <div class="status-sub">
+        ${chipsSub}
+      </div>
+    </div>
+  `.trim();
+}
+
+function iconOnlyFromState_(state){
+  if(state === '完了') return '✔️';
+  if(state === '未着手') return '⏸️';
+  if(state === '対応中') return '🔅';
+  if(state === 'ー') return '❌';
+  return '•';
+}
+
+/* コメント用 */
+function noteToCardsHtml_(noteText){
+  const s = String(noteText ?? '').trim();
+  if(!s) return '';
+
+  const lines = s.split('\n').map(x=>x.trim()).filter(Boolean);
+  const items = [];
+
+  lines.forEach(line=>{
+    const m = line.match(/^(.+?)：(.+)$/); // 全角コロン
+    if(!m) return;
+
+    const rawTitle = m[1].trim();
+    const body = m[2];
+
+    // ① 事前準備→案件 表示
+    const title = (rawTitle === '案件確認') ? '案件' : rawTitle;
+
+    items.push({ title, body });
+  });
+
+  if(!items.length) return '';
+
+  return `
+    <div class="noteCards">
+      ${items.map(it=>{
+        const vlab = noteVLabel_(it.title); // 社内/社外/案件
+        return `
+          <div class="noteCard">
+            <div class="noteVTitle">${escapeHtml(vlab)}</div>
+            <div class="noteBody">${escapeHtml(it.body)}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+function noteTitleAlias_(t){
+  t = String(t || '').trim();
+  if(t === '案件確認') return '案件';
+  return t;
+}
+
+function noteVLabel_(title){
+  const t = String(title || '').trim();
+
+  // 案件確認は一覧では「案件」扱い
+  if(t === '案件確認' || t === '案件') return '案件';
+  if(t === '社内作業') return '社内';
+  if(t === '現地作業') return '社外';
+  if(t === '現地・リモート作業') return '社外';
+
+
+  // それ以外は先頭2文字だけ（保険）
+  return t.slice(0,2) || 'メモ';
+}
+
+function renderWorkSummaryHtml_(text) {
+  const s = String(text ?? '').trim();
+  if (!s) return '';
+
+  const lines = s.split(/\r?\n/);
+  const main = escapeHtml_(lines[0] || '');
+  const sub  = escapeHtml_(lines.slice(1).join(' '));
+
+  if (!sub) return `<div class="work-summary-cell">${main}</div>`;
+
+  return `
+    <div class="work-summary-cell">
+      <div>${main}</div>
+      <div class="sub">${sub}</div>
+    </div>
+  `;
+}
+
+function escapeHtml_(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+window.renderCases_ = renderCases_;
+window.buildHeader_ = buildHeader_;
+</script>

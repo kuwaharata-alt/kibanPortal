@@ -1,0 +1,96 @@
+<section id="panel-rule" class="panel active">
+  <div class="wrap rule">
+    <!-- ===== Tabs ===== -->
+    <div class="rule-tabs" id="ruleTabs">
+      <button id="tab_base" onclick="goViewTab('基盤ルール')">基盤ルール</button>
+      <button id="tab_sv" onclick="goViewTab('SV案件ルール')">SV案件ルール</button>
+      <button id="tab_cl" onclick="goViewTab('CL案件ルール')">CL案件ルール</button>
+      <button id="tab_kanri" onclick="goViewTab('案件管理表ルール')">案件管理表ルール</button>
+
+      <span class="rule-flex-spacer"></span>
+
+      <button id="tab_history" onclick="goHistoryTab()">履歴</button>
+      <button id="tab_edit" class="rule-primary" onclick="goEditTab()">ルール編集</button>
+    </div>
+
+    <!-- ===== View Bar ===== -->
+    <div class="rule-bar" id="barView">
+      <select id="section" onchange="reload()">
+        <option value="">Section: 全て</option>
+      </select>
+
+      <select id="enabled" onchange="reload()">
+        <option value="true">有効のみ</option>
+        <option value="">全て</option>
+        <option value="false">無効のみ</option>
+      </select>
+
+      <input id="q" placeholder="検索（内容/備考）"
+            onkeydown="if(event.key==='Enter') reload()" />
+
+      <button onclick="reload()">再読込</button>
+    </div>
+
+    <!-- ===== Edit Bar ===== -->
+    <div class="rule-bar" id="barEdit" style="display:none;">
+      <button class="rule-primary" onclick="openNew()">＋ 新規登録</button>
+
+      <select id="category" onchange="reload()">
+        <option value="">Category: 全て</option>
+        <option value="基盤ルール">基盤ルール</option>
+        <option value="SV案件ルール">SV案件ルール</option>
+        <option value="CL案件ルール">CL案件ルール</option>
+        <option value="案件管理表ルール">案件管理表ルール</option>
+      </select>
+
+      <select id="sectionEdit" onchange="reload()">
+        <option value="">Section: 全て</option>
+      </select>
+
+      <select id="enabledEdit" onchange="reload()">
+        <option value="">Enabled: 全て</option>
+        <option value="true">有効のみ</option>
+        <option value="false">無効のみ</option>
+      </select>
+
+      <input id="qEdit" placeholder="検索（内容/備考）"
+            onkeydown="if(event.key==='Enter') reload()" />
+
+      <button onclick="reload()">再読込</button>
+    </div>
+
+    <!-- ===== History Bar ===== -->
+    <div class="rule-bar" id="barHistory" style="display:none;">
+      <select id="historyLimit" onchange="reloadHistory()">
+        <option value="50">最新50件</option>
+        <option value="200" selected>最新200件</option>
+        <option value="500">最新500件</option>
+      </select>
+      <button onclick="reloadHistory()">再読込</button>
+    </div>
+
+    <div id="status" class="rule-muted"></div>
+
+    <!-- ===== View ===== -->
+    <div id="viewWrap"></div>
+
+    <!-- ===== Edit Table ===== -->
+    <div id="editWrap" style="display:none;">
+      <table class="rule-table">
+        <thead> ... </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- ===== History ===== -->
+    <div id="historyWrap" style="display:none;">
+      <table class="rule-table">
+        <thead> ... </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+
+    <!-- ===== Dialog ===== -->
+    <dialog id="dlg" class="rule-dialog"> ... </dialog>
+  </div>
+</section>

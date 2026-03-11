@@ -1,0 +1,849 @@
+<style>
+/* =========================================================
+   Unified Modal
+   - #modalStatus 専用
+   - 詳細 / 更新:ステータス / 更新:案件情報
+   ========================================================= */
+
+/* ===== Root / Overlay ===== */
+#modalStatus[aria-hidden="true"]{
+  display: none;
+}
+
+#modalStatus[aria-hidden="false"]{
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+}
+
+#modalStatus .modal-bg{
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.34);
+}
+
+/* ===== Card ===== */
+#modalStatus .modal-card{
+  position: relative;
+  width: min(1100px, calc(100vw - 40px));
+  max-height: calc(100vh - 32px);
+  margin: 16px auto;
+  background: #fff; 
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ===== Header ===== */
+#modalStatus .modal-head{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+#modalStatus .modal-title{
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+#modalStatus .modal-meta{
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+#modalStatus .modal-err{
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+
+#modalStatus .iconbtn{
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+#modalStatus .iconbtn:hover{
+  background: #f9fafb;
+}
+
+/* ===== Tabs ===== */
+#modalStatus .st-tabs{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+#modalStatus .st-tab{
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  padding: 6px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+#modalStatus .st-tab.is-active{
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+#modalStatus .st-tab-spacer{
+  flex: 1;
+}
+
+/* ===== Body / Footer ===== */
+#modalStatus .modal-body{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px;
+  background: #fafbfd;
+}
+
+#modalStatus .modal-foot{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+#modalStatus .st-panel.is-hidden{
+  display: none;
+}
+
+/* ===== Buttons ===== */
+#modalStatus .btn{
+  padding: 9px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+}
+
+#modalStatus .btn:hover{
+  background: #f9fafb;
+}
+
+#modalStatus .btn.btn-primary,
+#modalStatus .btn.primary{
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+#modalStatus .btn.btn-primary:hover,
+#modalStatus .btn.primary:hover{
+  background: #1d4ed8;
+}
+
+#modalStatus .btn[disabled]{
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+/* =========================================================
+   Detail Tab
+   ========================================================= */
+#modalStatus #stSections{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+#modalStatus .st-sec{
+  margin-bottom: 0;   /* ← grid gap に任せる */
+  height: fit-content;
+}
+
+#modalStatus .detail-card{
+  border: 1px solid #dbe3ef;
+  border-radius: 16px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+#modalStatus .detail-card:last-child{
+  margin-bottom: 0;
+}
+
+#modalStatus .detail-card h3{
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  background: #eef2ff;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+#modalStatus .detail-card > .detail-grid{
+  padding: 14px 16px;
+}
+
+#modalStatus .detail-grid{
+  display: grid;
+  gap: 12px;
+}
+
+#modalStatus .detail-grid-2{
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#modalStatus .detail-grid-3{
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#modalStatus .detail-grid-4{
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#modalStatus .detail-grid-5{
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+#modalStatus .detail-field{
+  min-width: 0;
+}
+
+#modalStatus .detail-label{
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 6px;
+}
+
+#modalStatus .detail-box{
+  min-height: 42px;
+  border: 1px solid #d7dee8;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  color: #111827;
+  line-height: 1.5;
+}
+
+#modalStatus .detail-box a{
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+/* span utility */
+#modalStatus .detail-field.col-span-2{ grid-column: span 2; }
+#modalStatus .detail-field.col-span-3{ grid-column: span 3; }
+#modalStatus .detail-field.col-span-4{ grid-column: span 4; }
+
+#modalStatus .detail-field.row-span-2{ grid-row: span 2; }
+
+/* 任意：縦2行の見た目補正 */
+#modalStatus .detail-field.row-span-2 .detail-box{
+  min-height: 108px;
+}
+
+/* =========================================================
+   Status Tab
+   ========================================================= */
+#modalStatus #form-status{
+  display: block;
+}
+
+#modalStatus .st-sec{
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+#modalStatus .st-sec:last-child{
+  margin-bottom: 0;
+}
+
+#modalStatus .st-secHead{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  background: #eef2ff;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+#modalStatus .st-secTitle{
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+#modalStatus .st-secRight{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#modalStatus .st-block{
+  padding: 0;
+}
+
+#modalStatus .st-row{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+#modalStatus .st-row-comment{
+  align-items: flex-start;
+}
+
+#modalStatus .st-label{
+  min-width: 96px;
+  padding-left: 4px;
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+#modalStatus .st-row .fctrl,
+#modalStatus .st-ctrl{
+  flex: 1 1 auto;
+}
+
+#modalStatus .st-comment{
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+}
+
+/* NA時 */
+#modalStatus .st-disabled{
+  opacity: .45;
+  filter: grayscale(.35);
+  pointer-events: none;
+}
+
+/* エラー時に使うなら */
+#modalStatus .st-missing{
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+#modalStatus .pill{
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+}
+
+#modalStatus #stSections{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+#modalStatus .st-sec{
+  margin-bottom: 0;   /* ← grid gap に任せる */
+  height: fit-content;
+}
+
+#modalStatus .st-secBody{
+  padding: 8px 12px 10px;
+}
+
+@media (max-width: 900px){
+  #modalStatus #stSections{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   Input Tab
+   ========================================================= */
+#modalStatus #form-input{
+  display: block;
+}
+
+#modalStatus .fsection{
+  margin: 0 0 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+#modalStatus .fsection:last-child{
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+#modalStatus .fsection h3{
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #111827;
+}
+
+#modalStatus .fgrid{
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  column-gap: 8px;
+  row-gap: 6px;
+}
+
+#modalStatus .flabel{
+  font-size: 12px;
+  color: #374151;
+  margin-top: 2px;
+}
+
+#modalStatus .fctrl{
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  outline: none;
+  background: #fff;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+#modalStatus .fctrl:focus{
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, .15);
+}
+
+#modalStatus .fctrl.sel-auto{
+  width: fit-content;
+  min-width: 90px;
+  max-width: 100%;
+}
+
+#modalStatus textarea.fctrl{
+  min-height: 84px;
+  resize: vertical;
+}
+
+/* checks */
+#modalStatus .checks{
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px 10px;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  align-items: center;
+}
+
+#modalStatus .checks label{
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* multi select */
+#modalStatus .stwrap{
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+#modalStatus .stwrap .msel{
+  flex: 0 0 260px;
+  min-width: 260px;
+}
+
+#modalStatus .msel{
+  position: relative;
+}
+
+#modalStatus .msel-btn{
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+#modalStatus .msel-panel{
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 260px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(0,0,0,.08);
+  padding: 8px;
+  display: none;
+  z-index: 80;
+}
+
+#modalStatus .msel-panel.open{
+  display: block;
+}
+
+#modalStatus .stwrap input[type="text"]{
+  flex: 1 1 auto;
+  min-width: 100px;
+}
+
+#modalStatus .msel-search{
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+#modalStatus .msel-group{
+  margin-bottom: 8px;
+}
+
+#modalStatus .msel-gtitle{
+  font-size: 12px;
+  color: #6b7280;
+  padding: 4px 0 2px;
+  border-bottom: 1px dashed #e5e7eb;
+  margin-bottom: 6px;
+  text-align: left;
+}
+
+#modalStatus .msel-groupItems{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+}
+
+#modalStatus .msel-item{
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  width: auto;
+  min-width: 0;
+  padding: 2px 4px;
+  line-height: 1.2;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+#modalStatus label.msel-item{
+  display: inline-flex;
+  width: auto;
+  min-width: 0;
+}
+
+#modalStatus .msel-item input[type="checkbox"]{
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+#modalStatus .msel-item .msel-text{
+  display: inline;
+  margin: 0;
+}
+
+#modalStatus .msel-item:hover{
+  background: #f3f4f6;
+  border-radius: 6px;
+}
+
+#modalStatus .msel-text{
+  margin-left:2px;
+}
+
+/* =========================================================
+   Scrollbar
+   ========================================================= */
+#modalStatus .modal-body::-webkit-scrollbar,
+#modalStatus .msel-panel::-webkit-scrollbar{
+  width: 10px;
+}
+
+#modalStatus .modal-body::-webkit-scrollbar-thumb,
+#modalStatus .msel-panel::-webkit-scrollbar-thumb{
+  background: #d1d5db;
+  border-radius: 999px;
+}
+
+#modalStatus .modal-body::-webkit-scrollbar-track,
+#modalStatus .msel-panel::-webkit-scrollbar-track{
+  background: transparent;
+}
+
+/* =========================================================
+   Responsive
+   ========================================================= */
+@media (max-width: 980px){
+  #modalStatus .detail-grid-4{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #modalStatus .detail-field.col-span-3,
+  #modalStatus .detail-field.col-span-4{
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 900px){
+  #modalStatus .checks{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px){
+  #modalStatus .fgrid{
+    grid-template-columns: 1fr;
+  }
+
+  #modalStatus .stwrap{
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px){
+  #modalStatus .modal-card{
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    margin: 10px auto;
+    border-radius: 14px;
+  }
+
+  #modalStatus .modal-head,
+  #modalStatus .modal-foot,
+  #modalStatus .modal-body{
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  #modalStatus .detail-grid-2,
+  #modalStatus .detail-grid-3,
+  #modalStatus .detail-grid-4{
+    grid-template-columns: 1fr;
+  }
+
+  #modalStatus .detail-field.col-span-2,
+  #modalStatus .detail-field.col-span-3,
+  #modalStatus .detail-field.col-span-4{
+    grid-column: span 1;
+  }
+
+  #modalStatus .checks{
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #modalStatus .st-row{
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  #modalStatus .st-label{
+    min-width: 0;
+    padding-left: 0;
+  }
+}
+
+/* ===== 案件情報タブ 2カラム ===== */
+/* ===== 案件情報タブ 2カラム ===== */
+#modalStatus #form-input .input2col{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+#modalStatus #form-input .input2col-col{
+  min-width: 0;
+}
+
+/* セクションカード */
+#modalStatus #form-input .fsection{
+  margin: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: visible; 
+}
+
+#modalStatus #form-input .fsection h3{
+  margin: 0;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+#modalStatus #form-input .fgrid{
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 10px 12px;
+  padding: 14px;
+  align-items: start;
+}
+
+#modalStatus #form-input .flabel{
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  padding-top: 8px;
+}
+
+#modalStatus #form-input .fctrl,
+#modalStatus #form-input select.fctrl,
+#modalStatus #form-input input.fctrl,
+#modalStatus #form-input textarea.fctrl{
+  width: 100%;
+  min-height: 36px;
+  box-sizing: border-box;
+}
+
+/* 共通 checks */
+#modalStatus #form-input .checks.fctrl{
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+/* 左側：作業形態 */
+#modalStatus #form-input .checks.fctrl[data-name="作業形態"]{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 10px 12px;
+  min-height: 36px;
+  overflow: visible;
+}
+
+#modalStatus #form-input .checks.fctrl[data-name="作業形態"] label{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+/* 右側：サポート */
+#modalStatus #form-input .checks.fctrl[data-name="サポート"]{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 8px 14px;
+  padding: 10px 12px;
+  max-height: 300px;
+  max-width: 300px;
+  overflow: auto;
+}
+
+#modalStatus #form-input .checks.fctrl[data-name="サポート"] label{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* 現地作業場所 */
+#modalStatus #form-input .stwrap{
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+/* 既存の checks 5列指定を打ち消す */
+#modalStatus #form-input .checks{
+  grid-template-columns: none;
+}
+
+/* レスポンシブ */
+@media (max-width: 1100px){
+  #modalStatus #form-input .input2col{
+    grid-template-columns: 1fr;
+  }
+
+  #modalStatus #form-input .checks.fctrl[data-name="サポート"]{
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  #modalStatus #form-input .stwrap{
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 住所 */
+.detail-field-map{
+  display:flex;
+  align-items:center;
+}
+
+.detail-field-map.no-label{
+  padding-top: 22px; /* 他項目のラベル高さに合わせる */
+}
+
+.btn-map{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:40px;
+  width:100%;
+  border: 1px solid #dbe2ea;
+  border-radius: 18px;
+  background:transparent;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:600;
+  white-space:nowrap;
+}
+
+.btn-map:hover{
+  text-decoration:underline;
+}
+</style>

@@ -1,0 +1,227 @@
+<style>
+.operation-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+  height: calc(100vh - 180px); /* 調整 */
+}
+
+.operation-grid{
+  display:grid;
+  grid-template-rows: 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
+  gap:16px;
+  height:100%;
+}
+
+.operation-top{
+  grid-column: 1 / 3;
+  display:flex;
+  flex-direction:column;
+}
+
+.operation-left,
+.operation-right{
+  display:flex;
+  flex-direction:column;
+}
+
+.operation-box{
+  flex:1;
+  border:1px solid var(--line);
+  border-radius:12px;
+  overflow:auto;     /* ★ 各ボックス独立スクロール */
+  padding:8px;
+  background:#fff;
+}
+
+.operation-box table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.operation-box th{
+  background:#f3f4f6;
+  position:sticky;
+  top:0;
+  z-index:1;
+}
+
+.operation-box th,
+.operation-box td{
+  padding:6px 8px;
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+
+.operation-box td.op-ml{
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.operation-box .op-input{
+  width: 100%;
+  box-sizing: border-box;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:13px;
+  background:#fff;
+}
+
+.operation-box .op-textarea{
+  width: 100%;
+  box-sizing: border-box;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:13px;
+  background:#fff;
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.operation-box tr.is-saving{
+  opacity: .6;
+}
+
+/* ===== 行編集UI ===== */
+.operation-box .op-input,
+.operation-box .op-select,
+.operation-box .op-textarea{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid var(--line);
+  border-radius:8px;
+  padding:6px 8px;
+  font-size:13px;
+  background:#fff;
+}
+
+.operation-box .op-textarea{
+  resize: vertical;
+  white-space: pre-wrap;
+}
+
+.operation-box .op-save{
+  padding:6px 10px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:12px;
+  cursor:pointer;
+  transition:.15s ease;
+  white-space:nowrap;
+}
+
+.operation-box .op-save:hover{
+  border-color:var(--pri);
+  color:var(--pri);
+}
+
+.operation-box .op-save[disabled]{
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+/* 保存中の行 */
+.operation-box tr.is-saving{
+  opacity:.65;
+}
+
+/* ===== 右上トースト ===== */
+.op-toast{
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 9999;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.op-toast .toast{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,.08);
+  font-size:13px;
+  min-width: 220px;
+}
+
+.op-toast .toast .t-title{
+  font-weight:600;
+  margin-bottom:2px;
+}
+
+.op-toast .toast.ok{ border-color: rgba(6,95,70,.35); }
+.op-toast .toast.ng{ border-color: rgba(185,28,28,.35); }
+.op-toast .toast.warn{ border-color: rgba(26,115,232,.35); }
+
+.op-toast .toast small{
+  color:var(--sub);
+}
+
+/* 見出し行（タイトル＋右ボタン） */
+.op-headrow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:8px;
+}
+.op-headrow h3{ margin:0; }
+
+/* 編集ボタン */
+.op-editbtn{
+  padding:6px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:13px;
+  cursor:pointer;
+  transition:.15s ease;
+}
+.op-editbtn:hover{
+  border-color:var(--pri);
+  color:var(--pri);
+}
+.op-editbtn.is-on{
+  border-color:var(--pri);
+  background:var(--pri-soft);
+  color:var(--pri);
+  font-weight:600;
+}
+
+/* disabled状態（保存ボタン含む） */
+.operation-box .op-save[disabled],
+.operation-box .op-select:disabled,
+.operation-box .op-textarea:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+/* ===== 行の高さ（倍くらい） ===== */
+.operation-box th,
+.operation-box td{
+  padding:12px 14px;   /* ← 元より増やす */
+}
+
+/* 稼働状況のテキストエリアも大きく */
+.operation-box .op-textarea{
+  min-height: 72px;    /* ← 行高さUP */
+}
+
+/* 編集OFF時の「稼働状況」全文表示 */
+.operation-box .op-view{
+  white-space: pre-wrap;     /* 改行も反映 */
+  word-break: break-word;
+  line-height: 1.5;
+  padding: 2px 0;
+}
+
+</style>

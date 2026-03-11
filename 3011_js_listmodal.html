@@ -1,0 +1,888 @@
+<script>
+/* =========================================================
+ * Unified Modal (3 tabs)
+ * - detail
+ * - status
+ * - input
+ * ======================================================= */
+
+window.__unifiedModalState = {
+  key: '',
+  type: 'SV',
+  customer: '',
+  detail: null,
+  statusMaster: null,
+  caseStatus: { statusMap:{}, naGroups:{}, currentCode:'' },
+  input: null,
+  loaded: false,
+  activeTab: 'detail',
+  dirty: false,
+  statusFormBuilt: false,
+  inputFormBuilt: false
+};
+
+const $id = (id) => document.getElementById(id);
+const $qs = (sel, root=document) => root.querySelector(sel);
+const $qsa = (sel, root=document) => Array.from(root.querySelectorAll(sel));
+
+/* =========================================================
+ * Public Entry
+ * ======================================================= */
+
+function openView(key, customer=''){
+  key = String(key ?? '').trim();
+  if (!key) {
+    alert('見積番号が空です（key取得失敗）');
+    return;
+  }
+
+  openUnifiedModal(key, customer)
+    .then(() => switchUnifiedTab_('detail'))
+    .catch(err => {
+      console.error(err);
+      setErr?.(String(err));
+    });
+}
+
+async function openStatus(key, customer=''){
+  key = String(key ?? '').trim();
+  if (!key) {
+    alert('見積番号が空です（key取得失敗）');
+    return;
+  }
+
+ await openUnifiedModal(key, customer)
+    .then(() => switchUnifiedTab_('status'))
+    .catch(err => {
+      console.error(err);
+      setErr?.(String(err));
+    });
+}
+
+/* =========================================================
+ * Open / Close
+ * ======================================================= */
+
+async function openUnifiedModal(caseKey, customer) {
+  const modal = $id('modalStatus');
+  if (!modal) throw new Error('modalStatus not found');
+
+  const type = normalizeCaseTypeClient_(window.AppState?.type || 'SV');
+
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('is-open');
+  modal.dataset.key = String(caseKey || '');
+  modal.dataset.type = type;
+  modal.dataset.tab = 'detail';
+
+  if ($id('stTitle')) {
+    $id('stTitle').textContent = `【${caseKey}】${customer}`;
+  }
+  if ($id('stMeta')) {
+    $id('stMeta').textContent = '読込中...';
+  }
+  if ($id('stErr')) {
+    $id('stErr').textContent = '';
+  }
+
+  window.__unifiedModalState = {
+    key: String(caseKey || ''),
+    type,
+    customer: String(customer || ''),
+    detail: null,
+    statusMaster: null,
+    caseStatus: {
+      statusMap: {},
+      naGroups: {},
+      currentCode: ''
+    },
+    input: null,
+    loaded: false,
+    activeTab: 'detail',
+    dirty: false,
+    statusFormBuilt: false,
+    inputFormBuilt: false
+  };
+
+  clearUnifiedPanels_();
+  switchUnifiedTab_('detail', true);
+
+  const res = await fetchUnifiedCaseModal_(type, caseKey);
+
+  if (!res || !res.ok) {
+    if ($id('stMeta')) {
+      $id('stMeta').textContent = '';
+    }
+    if ($id('stErr')) {
+      $id('stErr').textContent = res?.error || '読込失敗';
+    }
+    throw new Error(res?.error || '読込失敗');
+  }
+
+  const st = window.__unifiedModalState;
+
+  st.detail = res.detail || {};
+  st.statusMaster = res.statusMaster || {
+    groups: [],
+    naOptions: ['対応有', '対応無']
+  };
+  st.caseStatus = {
+    statusMap: { ...(res.caseStatus?.statusMap || {}) },
+    naGroups: { ...(res.caseStatus?.naGroups || {}) },
+    currentCode: res.caseStatus?.currentCode || ''
+  };
+  st.input = normalizeInputRow_(res.input || {});
+  st.loaded = true;
+
+  renderUnifiedDetail_();
+  renderUnifiedStatus_();
+  await renderUnifiedInput_();
+
+  bindUnifiedDirtyEvents_();
+  refreshUnifiedSaveState_();
+
+  if ($id('stMeta')) {
+    $id('stMeta').textContent = '';
+  }
+
+  return true;
+}
+
+function closeUnifiedModal_(){
+  const modal = $id('modalStatus');
+  if (!modal) return;
+
+  modal.setAttribute('aria-hidden', 'true');
+  modal.classList.remove('is-open');
+  modal.dataset.key = '';
+  modal.dataset.type = '';
+  modal.dataset.idxcustomer = '';
+  modal.dataset.tab = 'detail';
+
+  if ($id('stTitle')) $id('stTitle').textContent = '更新：';
+  if ($id('stMeta'))  $id('stMeta').textContent = '';
+  if ($id('stErr'))   $id('stErr').textContent = '';
+
+  clearUnifiedPanels_();
+
+  window.__statusModalState = null;
+  window.__unifiedModalState = {
+    key: '',
+    type: 'SV',
+    customer: '',
+    detail: null,
+    statusMaster: null,
+    caseStatus: { statusMap:{}, naGroups:{}, currentCode:'' },
+    input: null,
+    loaded: false,
+    activeTab: 'detail',
+    dirty: false,
+    statusFormBuilt: false,
+    inputFormBuilt: false
+  };
+
+  switchUnifiedTab_('detail', true);
+}
+
+/* =========================================================
+ * Fetch / Save API
+ * ======================================================= */
+
+function fetchUnifiedCaseModal_(type, key){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      .api_getUnifiedCaseModal({ type, key });
+  });
+}
+
+function saveUnifiedCaseModalApi_(payload){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      .api_saveUnifiedCaseModal(payload);
+  });
+}
+
+/* =========================================================
+ * Tabs
+ * ======================================================= */
+
+function switchUnifiedTab_(tab, force=false){
+  const modal = $id('modalStatus');
+  if (!modal) return;
+
+  const st = window.__unifiedModalState || {};
+  if (!force && st.activeTab === tab) return;
+
+  st.activeTab = tab;
+  modal.dataset.tab = tab;
+
+  $qsa('#stTabs .st-tab').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.tab === tab);
+  });
+
+  const pDetail = $id('stPanelDetail');
+  const pStatus = $id('stPanelStatus');
+  const pInput  = $id('stPanelInput');
+
+  if (pDetail) pDetail.classList.toggle('is-hidden', tab !== 'detail');
+  if (pStatus) pStatus.classList.toggle('is-hidden', tab !== 'status');
+  if (pInput)  pInput.classList.toggle('is-hidden', tab !== 'input');
+}
+
+/* =========================================================
+ * Save
+ * ======================================================= */
+
+function collectUnifiedPayload_(){
+  const modal = $id('modalStatus');
+  const key = modal?.dataset?.key || '';
+  const type = normalizeCaseTypeClient_(modal?.dataset?.type || window.AppState?.type || 'SV');
+
+  const status = collectStatusUpdates_();
+  const inputValues = collectInputUpdates_();
+
+  return {
+    key,
+    type,
+    status: {
+      current_status_code: status.current_status_code || '',
+      statusMap: status.statusMap || {},
+      naBigs: status.naBigs || []
+    },
+    input: {
+      values: inputValues || {}
+    }
+  };
+}
+
+async function saveUnifiedModal_(){
+  const errEl = $id('stErr');
+  const metaEl = $id('stMeta');
+  const btn = $id('btnUnifiedSave');
+
+  if (errEl) errEl.textContent = '';
+
+  if (!validateStatusRequired_()) {
+    switchUnifiedTab_('status');
+    return;
+  }
+
+  const payload = collectUnifiedPayload_();
+  if (!payload.key) {
+    if (errEl) errEl.textContent = 'key が取得できません';
+    return;
+  }
+
+  if (metaEl) metaEl.textContent = '保存中...';
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await saveUnifiedCaseModalApi_(payload);
+
+    if (!res || !res.ok) {
+      if (metaEl) metaEl.textContent = '';
+      if (btn) btn.disabled = false;
+      if (errEl) errEl.textContent = res?.error || '保存に失敗しました';
+      return;
+    }
+
+    const st = window.__unifiedModalState;
+    st.detail = res.detail || {};
+    st.statusMaster = res.statusMaster || st.statusMaster;
+    st.caseStatus = {
+      statusMap: { ...(res.caseStatus?.statusMap || {}) },
+      naGroups: { ...(res.caseStatus?.naGroups || {}) },
+      currentCode: res.caseStatus?.currentCode || ''
+    };
+    st.input = normalizeInputRow_(res.input || {});
+    st.dirty = false;
+
+    renderUnifiedDetail_();
+    renderUnifiedStatus_();
+    await renderUnifiedInput_();
+    refreshUnifiedSaveState_();
+
+    if (metaEl) metaEl.textContent = '';
+    closeUnifiedModal_();
+
+    if (typeof loadCases_ === 'function') {
+      try { await loadCases_(); } catch (e) { console.warn(e); }
+    }
+
+  } catch (e) {
+    console.error(e);
+    if (metaEl) metaEl.textContent = '';
+    if (btn) btn.disabled = false;
+    if (errEl) errEl.textContent = 'api_saveUnifiedCaseModal failure: ' + String(e);
+  }
+}
+
+/* =========================================================
+ * Collect
+ * ======================================================= */
+
+function collectStatusUpdates_(){
+  const values = window.__statusModalState?.values || { naGroups:{}, statusMap:{}, current_status_code:'' };
+
+  $qsa('#form-status .fctrl').forEach(el => {
+    if (!el.name) return;
+    const name = el.name;
+    const v = el.value ?? '';
+
+    if (name.startsWith('NA_')) {
+      values.naGroups[name] = v || '対応有';
+    }
+    if (name.startsWith('ST_')) {
+      if (v) values.statusMap[name] = v;
+      else delete values.statusMap[name];
+    }
+    if (name.startsWith('CM_')) {
+      if (String(v).trim() !== '') values.statusMap[name] = String(v);
+      else delete values.statusMap[name];
+    }
+  });
+
+  const naBigs = [];
+  Object.keys(values.naGroups || {}).forEach(k => {
+    if (!k.startsWith('NA_')) return;
+    if ((values.naGroups[k] || '') === '対応無') naBigs.push(k.slice(3));
+  });
+
+  const master = window.__statusModalState?.master;
+  if (master?.groups) {
+    master.groups.forEach(g => {
+      if (!g.na_enable) return;
+      if (!naBigs.includes(g.big)) return;
+      (g.mids || []).forEach(m => {
+        values.statusMap[`ST_${g.big}__${m.mid}`] = 'ー';
+      });
+    });
+  }
+
+  return {
+    current_status_code: values.current_status_code || '',
+    statusMap: values.statusMap || {},
+    naBigs
+  };
+}
+
+function collectInputUpdates_(){
+  const updates = {};
+
+  $qsa('#form-input .fctrl').forEach(el => {
+    if (el.classList.contains('checks')) return;
+    if (!el.name) return;
+    updates[el.name] = el.value ?? '';
+  });
+
+  $qsa('#form-input .checks').forEach(box => {
+    const name = box.dataset.name || 'サポート';
+    const arr = Array.from(box.querySelectorAll('input[type="checkbox"]:checked')).map(chk => chk.value);
+    updates[name] = arr;
+  });
+
+  const prefsRaw = String(updates['現地作業場所__prefs'] || '').trim();
+  updates['現地作業場所'] = prefsRaw;
+  delete updates['現地作業場所__prefs'];
+
+  return updates;
+}
+
+/* =========================================================
+ * Validate / Dirty
+ * ======================================================= */
+
+function validateStatusRequired_(){
+  const st = window.__statusModalState;
+  const btn = $id('btnUnifiedSave');
+
+  if (!st?.master) {
+    if (btn) btn.disabled = true;
+    return false;
+  }
+
+  const values = st.values || {};
+  const groups = st.master.groups || [];
+
+  const missing = [];
+  groups.forEach(g => {
+    const big = g.big;
+    const na = values.naGroups?.[`NA_${big}`] || '対応有';
+    if (na === '対応無') return;
+
+    (g.mids || []).forEach(m => {
+      if (!m.force) return;
+      const k = `ST_${big}__${m.mid}`;
+      if (!values.statusMap?.[k]) missing.push(`${big}/${m.mid}`);
+    });
+  });
+
+  if (missing.length) {
+    if (btn) btn.disabled = true;
+    if ($id('stErr')) $id('stErr').textContent = `必須未選択: ${missing.join(' , ')}`;
+    return false;
+  }
+
+  if ($id('stErr')) $id('stErr').textContent = '';
+  if (btn) btn.disabled = false;
+  return true;
+}
+
+function markUnifiedDirty_(){
+  const st = window.__unifiedModalState;
+  if (!st) return;
+  st.dirty = true;
+}
+
+function refreshUnifiedSaveState_(){
+  validateStatusRequired_();
+}
+
+function bindUnifiedDirtyEvents_(){
+  $qsa('#form-input input, #form-input select, #form-input textarea').forEach(el => {
+    el.addEventListener('input', markUnifiedDirty_);
+    el.addEventListener('change', markUnifiedDirty_);
+  });
+}
+
+/* =========================================================
+ * Input Form Helpers
+ * ======================================================= */
+
+function buildInputForm_(form, people, locGroups){
+  form.innerHTML = '';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'input2col';
+
+  const left = document.createElement('div');
+  left.className = 'input2col-col';
+
+  const right = document.createElement('div');
+  right.className = 'input2col-col';
+
+  buildFormSection_(left, '案件情報', [
+    { key:'作業難度', type:'select', options:['','S','A','B','C'], value:'' },
+    { key:'作業形態', type:'checks', options:['本社','倉庫','現地','リモート'], value:[] },
+    { key:'現地作業場所', type:'multi_select', groups: locGroups, value:[] },
+    { key:'最寄り', type:'text', placeholder:'最寄り、地域(渋谷 / 名古屋 / 博多 etc...)', value:'' },
+    { key:'住所', type:'text', value:'' },
+    { key:'作業内容', type:'text', value:'' },
+  ]);
+
+  buildFormSection_(right, '作業者情報', [
+    { key:'監督者', type:'select', options:['ー', ...people], value:'' },
+    { key:'管理者', type:'select', options:['未アサイン', ...people], value:'' },
+    { key:'サポート', type:'checks', options: people, value:[] },
+    { key:'BP利用', type:'select', options:['有','無'], value:'' },
+  ]);
+
+  wrap.appendChild(left);
+  wrap.appendChild(right);
+  form.appendChild(wrap);
+
+  initAutoSizeSelects?.(form);
+  form.scrollTop = 0;
+}
+
+function fillModalFromRow(row){
+  $qsa('#form-input [name]').forEach(el => {
+    const name = el.name;
+    if (el.type === 'checkbox') return;
+    if (name === '現地作業場所__prefs') return;
+    if (!(name in row)) return;
+
+    const v = row[name];
+
+    if (el.tagName === 'SELECT') {
+      const sval = String(v ?? '');
+      const has = Array.from(el.options).some(o => o.value === sval);
+      if (has) el.value = sval;
+      el.dispatchEvent(new Event('change', { bubbles:true }));
+      return;
+    }
+
+    el.value = String(v ?? '');
+  });
+
+  applyChecksByName_('サポート', row['サポート']);
+  applyChecksByName_('作業形態', row['作業形態']);
+  applyChecksByName_('現地作業場所', row['現地作業場所']);
+
+  initAutoSizeSelects?.($id('form-input'));
+}
+
+function applyChecksByName_(name, value){
+  const arr = splitMultiValues_(value);
+
+  const box =
+    document.querySelector(`#form-input .checks[data-name="${name}"]`) ||
+    document.querySelector(`#form-input .msel[data-name="${name}__prefs"]`);
+
+  if (!box) return;
+
+  box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.checked = arr.includes(String(cb.value).trim());
+  });
+
+  if (box.classList.contains('msel')) {
+    const hidden = box.querySelector(`input[type="hidden"][name="${name}__prefs"]`);
+    const btn = box.querySelector('.msel-btn');
+
+    if (hidden) hidden.value = arr.join('/');
+    if (btn) btn.textContent = arr.length ? arr.join('、') : '都道府県を選択';
+  }
+}
+
+function clearInputForm_(){
+  const form = $id('form-input');
+  if (!form) return;
+
+  form.querySelectorAll('input[type="text"], input[type="date"], textarea').forEach(el => {
+    el.value = '';
+  });
+
+  form.querySelectorAll('select').forEach(el => {
+    el.selectedIndex = 0;
+    el.dispatchEvent(new Event('change', { bubbles:true }));
+  });
+
+  form.querySelectorAll('input[type="checkbox"]').forEach(el => {
+    el.checked = false;
+  });
+}
+
+/* =========================================================
+ * Master Fetch
+ * ======================================================= */
+
+function fetchMemberMaster_(){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(res => res?.ok ? resolve(res.members || []) : reject(res?.error || 'members failed'))
+      .withFailureHandler(reject)
+      .api_getMembers();
+  });
+}
+
+function fetchLocationMaster_(){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res || !res.ok) return reject(res?.error || 'api_getLocationMaster failed');
+        resolve(res.groups || []);
+      })
+      .withFailureHandler(reject)
+      .api_getLocationMaster();
+  });
+}
+
+/* =========================================================
+ * Shared Helpers
+ * ======================================================= */
+
+function clearUnifiedPanels_(){
+  if ($id('detailMount')) $id('detailMount').innerHTML = '';
+  if ($id('stSections'))  $id('stSections').innerHTML = '';
+  if ($id('form-input'))  $id('form-input').innerHTML = '';
+}
+
+function normalizeCaseTypeClient_(type){
+  const t = String(type || 'SV').trim().toUpperCase();
+  if (t === 'PC') return 'CL';
+  return t || 'SV';
+}
+
+function normalizeInputRow_(row){
+  const out = { ...(row || {}) };
+
+  if (row?.['作業開始予定'] != null) {
+    out['開始日'] = ymdSlashToDash_(row['作業開始予定']);
+  }
+  if (row?.['作業完了予定'] != null) {
+    out['終了日'] = ymdSlashToDash_(row['作業完了予定']);
+  }
+
+  return out;
+}
+
+function isDateMid_(big, mid){
+  return (
+    mid === '作業期間：開始' ||
+    mid === '作業期間：終了' ||
+    mid === '次回作業日' ||
+    mid === '入荷予定' ||
+    mid === '出荷予定' ||
+    mid === '作業予定日' ||
+    mid === 'キックオフ予定'
+  );
+}
+
+function ymdSlashToDash_(s){
+  const v = String(s || '').trim();
+  const m = v.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return '';
+  const yyyy = m[1];
+  const mm = ('0' + Number(m[2])).slice(-2);
+  const dd = ('0' + Number(m[3])).slice(-2);
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function ymdDashToSlash_(s){
+  const v = String(s || '').trim();
+  const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return '';
+  return `${m[1]}/${m[2]}/${m[3]}`;
+}
+
+function splitMultiValues_(v){
+  if (Array.isArray(v)) return v.map(x => String(x).trim()).filter(Boolean);
+  return String(v ?? '')
+    .split(/[\n,、\/／]/)
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function joinPeriod_(s, e){
+  s = String(s || '').trim();
+  e = String(e || '').trim();
+  if (!s && !e) return '－';
+  if (s && e) return s === e ? s : `${s} ～ ${e}`;
+  return s || e;
+}
+
+function nz_(v){
+  return v == null || v === '' ? '－' : String(v);
+}
+
+function escHtml_(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[c]));
+}
+
+function escAttr_(s){
+  return escHtml_(s);
+}
+
+function nl2brSafe_(s){
+  return escHtml_(String(s || '')).replace(/\n/g, '<br>');
+}
+
+/* =========================================================
+ * Existing UI Builder Reused
+ * ======================================================= */
+
+function buildFormSection_(containerEl, title, fields){
+  const sec = document.createElement('section');
+  sec.className = 'fsection';
+  sec.innerHTML = `<h3>${escHtml_(title)}</h3><div class="fgrid"></div>`;
+  const grid = sec.querySelector('.fgrid');
+
+  (fields || []).forEach(f => {
+    if (!f || f.missing) return;
+
+    const lb = document.createElement('div');
+    lb.className = 'flabel';
+    lb.textContent = f.label || f.key;
+
+    let ctrl;
+
+    if (f.type === 'select') {
+      ctrl = document.createElement('select');
+      ctrl.className = 'fctrl sel-auto';
+      ctrl.name = f.key;
+
+      (f.options || []).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.textContent = opt;
+        ctrl.appendChild(o);
+      });
+
+      ctrl.value = f.value || '';
+      ctrl.addEventListener('change', markUnifiedDirty_);
+
+    } else if (f.type === 'textarea') {
+      ctrl = document.createElement('textarea');
+      ctrl.className = 'fctrl';
+      ctrl.name = f.key;
+      ctrl.value = f.value || '';
+      ctrl.addEventListener('input', markUnifiedDirty_);
+      ctrl.addEventListener('change', markUnifiedDirty_);
+
+    } else if (f.type === 'checks') {
+      const wrap = document.createElement('div');
+      wrap.className = 'checks fctrl';
+      wrap.dataset.name = f.key;
+
+      const selected = new Set(
+        Array.isArray(f.value)
+          ? f.value.map(v => String(v).trim())
+          : String(f.value || '')
+              .split(/[\n,、\/／]/)
+              .map(s => s.trim())
+              .filter(Boolean)
+      );
+
+      (f.options || []).forEach(opt => {
+        const label = document.createElement('label');
+        label.innerHTML = `<input type="checkbox" value="${escAttr_(opt)}"> ${escHtml_(opt)}`;
+
+        const chk = label.querySelector('input');
+        chk.checked = selected.has(String(opt).trim());
+        chk.addEventListener('change', markUnifiedDirty_);
+
+        wrap.appendChild(label);
+      });
+
+      ctrl = wrap;
+
+    } else if (f.type === 'multi_select') {
+      const wrap = document.createElement('div');
+      wrap.className = 'stwrap';
+
+      const msel = document.createElement('div');
+      msel.className = 'msel';
+      msel.dataset.name = `${f.key}__prefs`;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'msel-btn';
+
+      const panel = document.createElement('div');
+      panel.className = 'msel-panel';
+
+      const search = document.createElement('input');
+      search.type = 'text';
+      search.className = 'msel-search';
+      search.placeholder = '検索（例：東京 / 愛知）';
+      panel.appendChild(search);
+
+      const selected = new Set(
+        Array.isArray(f.value)
+          ? f.value.map(v => String(v).trim())
+          : String(f.value || '')
+              .split(/[\/、,\n]/)
+              .map(s => s.trim())
+              .filter(Boolean)
+      );
+
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.className = 'fctrl';
+      hidden.name = `${f.key}__prefs`;
+      hidden.value = Array.from(selected).join('/');
+
+      const refreshLabel = () => {
+        const arr = Array.from(selected);
+        btn.textContent = arr.length ? arr.join('、') : '都道府県を選択';
+        hidden.value = arr.join('/');
+      };
+
+      search.addEventListener('input', () => {
+        const q = search.value.trim();
+        panel.querySelectorAll('.msel-item').forEach(el => {
+          const txt = (el.dataset.text || el.textContent || '').trim();
+          el.style.display = (!q || txt.includes(q)) ? '' : 'none';
+        });
+      });
+
+      (f.groups || []).forEach(g => {
+        const group = document.createElement('div');
+        group.className = 'msel-group';
+
+        const gt = document.createElement('div');
+        gt.className = 'msel-gtitle';
+        gt.textContent = g.area;
+        group.appendChild(gt);
+
+        const items = document.createElement('div');
+        items.className = 'msel-groupItems';
+
+        (g.prefs || []).forEach(p => {
+          const label = document.createElement('label');
+          label.className = 'msel-item';
+          label.dataset.text = p;
+          label.innerHTML = `<input type="checkbox" value="${escAttr_(p)}"><span class="msel-text">${escHtml_(p)}</span>`;
+
+          const chk = label.querySelector('input');
+          chk.checked = selected.has(String(p).trim());
+          chk.addEventListener('change', () => {
+            if (chk.checked) selected.add(String(p).trim());
+            else selected.delete(String(p).trim());
+            refreshLabel();
+            markUnifiedDirty_();
+          });
+
+          items.appendChild(label);
+        });
+
+        group.appendChild(items);
+        panel.appendChild(group);
+      });
+
+      btn.addEventListener('click', () => {
+        panel.classList.toggle('open');
+      });
+
+      setTimeout(() => {
+        document.addEventListener('click', (e) => {
+          if (!msel.contains(e.target)) panel.classList.remove('open');
+        });
+      }, 0);
+
+      refreshLabel();
+
+      msel.appendChild(btn);
+      msel.appendChild(panel);
+      msel.appendChild(hidden);
+      wrap.appendChild(msel);
+
+      ctrl = wrap;
+
+    } else {
+      ctrl = document.createElement('input');
+      ctrl.type = (f.type === 'date') ? 'date' : 'text';
+      ctrl.className = 'fctrl';
+      ctrl.name = f.key;
+      ctrl.value = f.value || '';
+      if (f.placeholder) ctrl.placeholder = f.placeholder;
+      ctrl.addEventListener('input', markUnifiedDirty_);
+      ctrl.addEventListener('change', markUnifiedDirty_);
+    }
+
+    grid.appendChild(lb);
+    grid.appendChild(ctrl);
+  });
+
+  containerEl.appendChild(sec);
+}
+
+/* =========================================================
+ *　Map
+ * ======================================================= */
+
+function openMap(btn){
+  const addr = btn.dataset.addr || '';
+
+  if(!addr || addr === '－'){
+    alert('住所が空です');
+    return;
+  }
+
+  const url =
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent(addr);
+
+  window.open(url, "_blank");
+}
+</script>

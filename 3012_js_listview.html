@@ -1,0 +1,365 @@
+<script>
+
+
+/* =========================================================
+ * Render : Detail
+ * ======================================================= */
+
+function renderUnifiedDetail_(){
+  const st = window.__unifiedModalState;
+  const d = st.detail || {};
+  const root = $id('detailMount');
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="detail-card">
+      <h3>基本情報</h3>
+      <div class="detail-grid detail-grid-4">
+        ${detailField_('見積番号', escHtml_(d.mitsuNo || '－'))}
+        ${detailField_('顧客名', escHtml_(d.customer || '－'))}
+        ${detailField_('分類', escHtml_(d.class))}
+        ${detailField_('ステータス', nl2brSafe_(d.status || '－'),1,2)}
+        ${detailField_('作業内容', escHtml_(d.workContent || '－'), 3)}
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>予定・リンク</h3>
+      <div class="detail-grid detail-grid-3">
+        ${detailField_('見積', linkHtml_(d.mitsuUrl))}
+        ${detailField_('作業フォルダ', linkHtml_(d.workFolderUrl))}
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>作業情報</h3>
+
+      <div class="detail-grid detail-grid-4">
+        ${detailField_('見積工数', escHtml_(nz_(d.mitsuKosu)))}
+        ${detailField_('作業形態', escHtml_(nz_(d.workStyle)))}
+        ${detailField_('作業難度', escHtml_(nz_(d.level)))}
+        ${detailField_('カテゴリタグ', escHtml_(nz_(d.tag)), 4)}
+      </div>
+
+      <div class="detail-grid detail-grid-5">
+        ${detailField_('現地作業場所', escHtml_(nz_(d.location)))}
+        ${detailField_('住所', escHtml_(nz_(d.address)), 3)}
+
+        <div class="detail-field detail-field-map no-label">
+          <button
+            type="button"
+            class="btn-map"
+            data-addr="${escHtml_(nz_(d.address))}"
+            onclick="openMap(this)">
+            &#x1F4CD; MAP
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>体制・属性</h3>
+      <div class="detail-grid detail-grid-3">
+        ${detailField_('監督者', escHtml_(nz_(d.supervisor)))}
+        ${detailField_('管理者', escHtml_(nz_(d.manager)))}
+        ${detailField_('サポート', escHtml_(nz_(d.support)))}
+
+        ${detailField_('担当営業', escHtml_(nz_(d.sales)))}
+        ${detailField_('担当プリ', escHtml_(nz_(d.pre)))}
+        ${detailField_('BP利用', escHtml_(nz_(d.bpUse)))}
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>進捗ステータス</h3>
+      <div class="detail-grid detail-grid-2">
+        ${detailField_('アサイン', escHtml_(nz_(d.stAssign)))}
+        ${detailField_('アサインメール', escHtml_(nz_(d.stAssignMail)))}
+        ${detailField_('案件確認', escHtml_(nz_(d.stConfirm)))}
+        ${detailField_('ヒアリングシート', escHtml_(nz_(d.stHearing)))}
+        ${detailField_('案件確認 期間', escHtml_(joinPeriod_(d.stConfirmStart, d.stConfirmEnd)))}
+        ${detailField_('案件確認 コメント', escHtml_(nz_(d.stConfirmComment)))}
+        ${detailField_('社内作業 期間', escHtml_(joinPeriod_(d.stInhouseStart, d.stInhouseEnd)))}
+        ${detailField_('社内作業 コメント', escHtml_(nz_(d.stInhouseComment)))}
+        ${detailField_('現地・リモート 期間', escHtml_(joinPeriod_(d.stOnsiteStart, d.stOnsiteEnd)))}
+        ${detailField_('現地・リモート コメント', escHtml_(nz_(d.stOnsiteComment)))}
+        ${detailField_('ドキュメント 作成', escHtml_(nz_(d.stDocCreate)))}
+        ${detailField_('ドキュメント レビュー', escHtml_(nz_(d.stDocReview)))}
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>更新情報</h3>
+      <div class="detail-grid detail-grid-3">
+        ${detailField_('updated_at', escHtml_(nz_(d.updatedAt)))}
+        ${detailField_('updated_by', escHtml_(nz_(d.updatedBy)))}
+        ${detailField_('rev / deleted', escHtml_([nz_(d.rev), nz_(d.deleted)].join(' / ')))}
+      </div>
+    </div>
+  `;
+}
+
+function detailField_(label, valueHtml, colSpan=1, rowSpan=1){
+
+  return `
+    <div class="detail-field 
+        ${colSpan>1 ? 'col-span-'+colSpan : ''} 
+        ${rowSpan>1 ? 'row-span-'+rowSpan : ''}">
+      <div class="detail-label">${escHtml_(label)}</div>
+      <div class="detail-box">${valueHtml}</div>
+    </div>
+  `;
+}
+
+function linkHtml_(url){
+  const v = String(url || '').trim();
+  if (!v) return '－';
+  return `<a href="${escAttr_(v)}" target="_blank" rel="noopener noreferrer">リンク</a>`;
+}
+
+/* =========================================================
+ * Render : Status
+ * ======================================================= */
+
+function renderUnifiedStatus_(){
+  const st = window.__unifiedModalState;
+  const master = st.statusMaster || { groups:[], naOptions:['対応有','対応無'] };
+  const values = st.caseStatus || { statusMap:{}, naGroups:{}, currentCode:'' };
+
+  window.__statusModalState = {
+    master: master,
+    values: {
+      naGroups: { ...(values.naGroups || {}) },
+      statusMap: { ...(values.statusMap || {}) },
+      current_status_code: values.currentCode || values.current_status_code || ''
+    },
+    __labelMap: {}
+  };
+
+  const v = window.__statusModalState.values;
+
+  (master.groups || []).forEach(g => {
+    if (!g.na_enable) return;
+
+    const keys = (g.mids || []).map(m => `ST_${g.big}__${m.mid}`);
+    const hasAny = keys.some(k => (v.statusMap[k] != null && String(v.statusMap[k]).trim() !== ''));
+    const allDash = hasAny && keys.every(k => String(v.statusMap[k] || '').trim() === 'ー');
+
+    if (!v.naGroups[`NA_${g.big}`]) {
+      v.naGroups[`NA_${g.big}`] = allDash ? '対応無' : '対応有';
+    }
+  });
+
+  (master.groups || []).forEach(g => {
+    (g.mids || []).forEach(m => {
+      const k = `ST_${g.big}__${m.mid}`;
+      if (v.statusMap[k]) return;
+
+      if (isDateMid_(g.big, m.mid)) return;
+
+      const defCode = (m.options || []).find(o => o.is_default)?.code || '';
+      if (defCode) v.statusMap[k] = defCode;
+    });
+  });
+
+  const sections = $id('stSections');
+  if (!sections) return;
+  sections.innerHTML = '';
+
+  const tplSec = $id('tpl-st-sec');
+  const tplRow = $id('tpl-st-row');
+  const tplNA = $id('tpl-st-na');
+  const tplNAFixed = $id('tpl-st-na-fixed');
+  const tplDate = $id('tpl-st-date');
+  const tplComment = $id('tpl-st-comment');
+
+  (master.groups || []).forEach(g => {
+    const big = g.big;
+    const naKey = `NA_${big}`;
+
+    if (!g.na_enable) v.naGroups[naKey] = '対応有';
+    const naVal = v.naGroups[naKey] || '対応有';
+    const isNA = naVal === '対応無';
+
+    const sec = tplSec.content.firstElementChild.cloneNode(true);
+    sec.querySelector('[data-st="bigTitle"]').textContent = big;
+
+    const rightArea = sec.querySelector('[data-st="rightArea"]');
+    rightArea.style.display = 'flex';
+    rightArea.style.gap = '8px';
+    rightArea.style.alignItems = 'center';
+
+    if (g.na_enable) {
+      const naSel = tplNA.content.firstElementChild.cloneNode(true);
+      naSel.name = naKey;
+
+      (master.naOptions || ['対応有', '対応無']).forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === naVal) o.selected = true;
+        naSel.appendChild(o);
+      });
+
+      naSel.addEventListener('change', () => {
+        v.naGroups[naKey] = naSel.value;
+
+        if (naSel.value === '対応無') {
+          (g.mids || []).forEach(m => {
+            v.statusMap[`ST_${big}__${m.mid}`] = 'ー';
+          });
+        } else {
+          (g.mids || []).forEach(m => {
+            const k = `ST_${big}__${m.mid}`;
+            if (String(v.statusMap[k] || '').trim() === 'ー') delete v.statusMap[k];
+          });
+        }
+
+        renderUnifiedStatus_();
+        markUnifiedDirty_();
+        refreshUnifiedSaveState_();
+      });
+
+      rightArea.appendChild(naSel);
+    } else {
+      rightArea.appendChild(tplNAFixed.content.firstElementChild.cloneNode(true));
+    }
+
+    const block = sec.querySelector('[data-st="block"]');
+    if (g.na_enable && isNA) block.classList.add('st-disabled');
+
+    (g.mids || []).forEach(m => {
+      const mid = m.mid;
+      const stKey = `ST_${big}__${mid}`;
+
+      const row = tplRow.content.firstElementChild.cloneNode(true);
+      const labelEl = row.querySelector('[data-st="label"]');
+      const selEl = row.querySelector('[data-st="select"]');
+
+      labelEl.textContent = mid;
+      window.__statusModalState.__labelMap[stKey] = labelEl;
+
+      if (isDateMid_(big, mid)) {
+        selEl.remove();
+
+        const dateEl = tplDate.content.firstElementChild.cloneNode(true);
+        dateEl.name = stKey;
+        dateEl.dataset.kind = 'date';
+
+        const cur = v.statusMap[stKey] || '';
+        if (String(cur).trim() === 'ー') {
+          dateEl.value = '';
+        } else {
+          dateEl.value = String(cur).includes('/') ? ymdSlashToDash_(cur) : String(cur);
+        }
+
+        if (g.na_enable && isNA) {
+          dateEl.disabled = true;
+          dateEl.classList.add('is-disabled');
+        }
+
+        dateEl.addEventListener('change', () => {
+          if (dateEl.value) {
+            v.statusMap[stKey] = ymdDashToSlash_(dateEl.value);
+          } else {
+            delete v.statusMap[stKey];
+          }
+          markUnifiedDirty_();
+          refreshUnifiedSaveState_();
+        });
+
+        row.appendChild(dateEl);
+
+      } else {
+        selEl.name = stKey;
+        selEl.innerHTML = '<option value="">（未選択）</option>';
+
+        (m.options || []).forEach(op => {
+          const o = document.createElement('option');
+          o.value = op.code;
+          o.textContent = op.small;
+          selEl.appendChild(o);
+        });
+
+        if (!(g.na_enable && isNA)) {
+          selEl.value = v.statusMap[stKey] || '';
+        } else {
+          selEl.value = '';
+          selEl.disabled = true;
+          selEl.classList.add('is-disabled');
+        }
+
+        selEl.addEventListener('change', () => {
+          if (selEl.value) {
+            v.statusMap[stKey] = selEl.value;
+            v.current_status_code = selEl.value;
+          } else {
+            delete v.statusMap[stKey];
+          }
+          markUnifiedDirty_();
+          refreshUnifiedSaveState_();
+        });
+      }
+
+      block.appendChild(row);
+    });
+
+    if (tplComment && (big === '案件確認' || big === '社内作業' || big === '現地作業' || big === '現地・リモート作業')) {
+      const cKey = `CM_${big}`;
+
+      const cRow = tplComment.content.firstElementChild.cloneNode(true);
+      cRow.querySelector('[data-st="commentLabel"]').textContent = 'コメント';
+
+      const ta = cRow.querySelector('[data-st="comment"]');
+      ta.name = cKey;
+      ta.value = v.statusMap?.[cKey] || '';
+      ta.dataset.kind = 'comment';
+
+      if (g.na_enable && isNA) {
+        ta.disabled = true;
+        ta.classList.add('is-disabled');
+      }
+
+      ta.addEventListener('input', () => {
+        const vv = String(ta.value || '');
+        if (vv.trim() !== '') v.statusMap[cKey] = vv;
+        else delete v.statusMap[cKey];
+
+        markUnifiedDirty_();
+        refreshUnifiedSaveState_();
+      });
+
+      block.appendChild(cRow);
+    }
+
+    sections.appendChild(sec);
+  });
+
+  const bodyEl = document.querySelector('#modalStatus .modal-body');
+  if (bodyEl && window.__unifiedModalState.activeTab === 'status') bodyEl.scrollTop = 0;
+}
+
+/* =========================================================
+ * Render : Input
+ * ======================================================= */
+
+async function renderUnifiedInput_(){
+  const st = window.__unifiedModalState;
+  const form = $id('form-input');
+  if (!form) return;
+
+  if (form.children.length === 0) {
+    const [people, locGroups] = await Promise.all([
+      fetchMemberMaster_(),
+      fetchLocationMaster_()
+    ]);
+
+    buildInputForm_(form, people, locGroups);
+    st.inputFormBuilt = true;
+  }
+
+  clearInputForm_();
+  fillModalFromRow(st.input || {});
+}
+
+</script>

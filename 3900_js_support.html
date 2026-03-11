@@ -1,0 +1,92 @@
+<script>
+  function prevPage(){
+    state.page = Math.max(1, state.page - 1);
+    loadCases_();
+  }
+
+  function nextPage(){
+    const maxPage = Math.max(1, Math.ceil(state.total / state.pageSize));
+    state.page = Math.min(maxPage, state.page + 1);
+    loadCases_();
+  }
+
+  function syncSticky(){
+    const header = document.querySelector('header');
+    const bar    = document.querySelector('.bar');
+
+    const h1 = header?.getBoundingClientRect().height || 0;
+    const h2 = bar?.getBoundingClientRect().height || 0;
+
+    const app = document.querySelector('.plan-app');
+    if (!app) return;
+
+    app.style.setProperty('--sticky-header-top', h1 + 'px');
+    app.style.setProperty('--sticky-table-top', (h1 + h2) + 'px');
+  }
+
+  window.addEventListener('DOMContentLoaded', syncSticky);
+  window.addEventListener('resize', syncSticky);
+
+  function autosizeSelect(el){
+    if (!el) return;
+
+    // 計測用のspanを作って、文字幅を測る
+    const span = document.createElement('span');
+    const cs = getComputedStyle(el);
+    span.style.visibility = 'hidden';
+    span.style.position = 'absolute';
+    span.style.whiteSpace = 'pre';
+    span.style.font = cs.font;                 // selectと同じフォントで測る
+    span.textContent = el.options[el.selectedIndex]?.text || '';
+    document.body.appendChild(span);
+
+    // 余白 + ▼（矢印）分を足す（OS/ブラウザ差があるので少し多め）
+    const extra = 44;
+    const w = Math.ceil(span.getBoundingClientRect().width) + extra;
+
+    document.body.removeChild(span);
+
+    el.style.width = w + 'px';
+  }
+
+  function initAutoSizeSelects(root=document){
+    root.querySelectorAll('select.fctrl.sel-auto').forEach(sel => {
+      autosizeSelect(sel);
+      sel.addEventListener('change', () => autosizeSelect(sel));
+    });
+  }
+
+  function fetchCaseByKey_(key){
+    return new Promise((resolve, reject) => {
+      const modal = document.getElementById('modalStatus');
+
+      const type =
+        (modal?.dataset?.type && String(modal.dataset.type).trim()) ||
+        (window.AppState?.type && String(AppState.type).trim()) ||
+        '';
+
+      // ★key が object で来ても吸収する
+      const keyStr = (typeof key === 'object' && key)
+        ? String(key.key || key.caseKey || key.見積番号 || '')
+        : String(key || '');
+
+      console.log('fetchCaseByKey_ type=', type, ' key=', keyStr, ' raw=', key);
+
+      google.script.run
+        .withSuccessHandler(res => resolve(res))
+        .withFailureHandler(err => reject(err))
+        .api_getCaseByKey(type, keyStr);
+    });
+  }
+  
+
+function escapeHtml_(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function jsStr_(v){
+  return JSON.stringify(String(v ?? ''));
+}
+</script>

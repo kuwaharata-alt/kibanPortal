@@ -1,0 +1,118 @@
+<script>
+async function initInfoHub(){
+  const $ = (id)=>document.getElementById(id);
+  const meta  = $('infohubMeta');
+  const tabs  = $('infohubTabs');
+  const thead = $('infohubThead');
+  const tbody = $('infohubTbody');
+  const btnRe = $('infohubReload');
+  const inpQ  = $('infohubSearch');
+
+  if(!tabs || !tbody || !thead || !meta) return;
+
+  // クリック等が二重に貼られないように（DOM単位）
+  const root = document.querySelector('.infohub-card');
+  if (root?.dataset.bound === '1') return;
+  if (root) root.dataset.bound = '1';
+
+  let currentSheet = '';
+  let raw = { headers:[], rows:[] };
+
+  btnRe?.addEventListener('click', ()=>loadSheet(currentSheet));
+  inpQ?.addEventListener('input', ()=>renderTable());
+
+  // --- 初回：シート一覧を取得してタブ作成 ---
+  meta.textContent = 'シート一覧を取得中...';
+  const list = await gsRun_('api_infoListSheets', {});
+  if(!list?.ok) {
+    meta.textContent = 'エラー';
+    tbody.innerHTML = `<tr><td class="muted">失敗: ${escapeHtml_(list?.error||'unknown')}</td></tr>`;
+    return;
+  }
+
+  meta.textContent = `SS: ${list.ssName} / シート数: ${list.sheets.length}`;
+
+  tabs.innerHTML = list.sheets.map((s,i)=>`
+    <button class="infohub-tab ${i===0?'is-active':''}" data-sheet="${escapeAttr_(s.name)}">${escapeHtml_(s.name)}</button>
+  `).join('');
+
+  tabs.addEventListener('click', (e)=>{
+    const b = e.target.closest('button[data-sheet]');
+    if(!b) return;
+    [...tabs.querySelectorAll('button')].forEach(x=>x.classList.remove('is-active'));
+    b.classList.add('is-active');
+    loadSheet(b.dataset.sheet);
+  });
+
+  // 最初のシートを表示
+  currentSheet = list.sheets[0]?.name || '';
+  if(currentSheet) await loadSheet(currentSheet);
+
+  async function loadSheet(sheetName){
+    if(!sheetName) return;
+    currentSheet = sheetName;
+    meta.textContent = `読み込み中...（${sheetName}）`;
+    thead.innerHTML = '';
+    tbody.innerHTML = `<tr><td class="muted">読み込み中...</td></tr>`;
+
+    const res = await gsRun_('api_infoGetSheet', { sheetName, limit: 500 });
+    if(!res?.ok){
+      meta.textContent = `エラー（${sheetName}）`;
+      tbody.innerHTML = `<tr><td class="muted">失敗: ${escapeHtml_(res?.error||'unknown')}</td></tr>`;
+      return;
+    }
+
+    raw = { headers: res.headers || [], rows: res.rows || [] };
+    meta.textContent = `${sheetName} / 表示 ${res.shown} 件（全 ${res.total} 件）`;
+    renderTable();
+  }
+
+  function renderTable(){
+    const q = (inpQ?.value || '').trim().toLowerCase();
+    const headers = raw.headers;
+    const rowsAll = raw.rows;
+
+    const rows = !q ? rowsAll : rowsAll.filter(r =>
+      r.some(c => String(c??'').toLowerCase().includes(q))
+    );
+
+    const mlCols = raw.headers
+    .map((h, i) => ({ h: String(h||''), i }))
+    .filter(x => /更新内容|稼働状況|備考|詳細|メモ/i.test(x.h))
+    .map(x => x.i);
+
+    // thead
+    thead.innerHTML = `<tr>${headers.map(h=>`<th>${escapeHtml_(h||'')}</th>`).join('')}</tr>`;
+
+    // tbody（URLリンク化・空は -）
+    tbody.innerHTML = rows.map(r=>{
+      return `<tr>${
+        r.map((cell, ci)=>{
+          const s = String(cell ?? '').trim();
+          const isML = mlCols.includes(ci);
+          const cls = isML ? 'infohub-ml' : '';
+
+          if(!s) return `<td class="muted ${cls}">-</td>`;
+          if(/^https?:\/\/\S+/i.test(s)){
+            return `<td class="${cls}"><a class="infohub-link" href="${escapeAttr_(s)}" target="_blank">開く</a></td>`;
+          }
+          return `<td class="${cls}">${escapeHtml_(s)}</td>`;
+        }).join('')
+      }</tr>`;
+    }).join('') || `<tr><td class="muted" colspan="${Math.max(1, headers.length)}">該当なし</td></tr>`;
+  }
+
+  function gsRun_(fn, params){
+    return new Promise((resolve, reject)=>{
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](params);
+    });
+  }
+  function escapeHtml_(s){
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr_(s){ return escapeHtml_(s); }
+}
+
+
+
+</script>

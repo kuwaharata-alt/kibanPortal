@@ -1,0 +1,57 @@
+<!-- ===== Panel: list ===== -->
+<section id="panel-list" class="panel">
+  <div class="bar wrap bar-split">
+    <!-- 左：担当者フィルタ -->
+    <div class="bar-left">
+      <label class="small">担当者</label>
+
+      <div class="dd" id="memberDD">
+        <button type="button" class="dd-btn" id="memberBtn" onclick="toggleMemberDD_(event)">
+          全員
+        </button>
+        <div class="dd-menu" id="memberMenu"></div>
+      </div>
+      <div class="st" id="stAll">
+        <button type="button" class="st-btn" id="statusBtn" onclick="stAll_(event)">
+          すべて
+        </button>
+        <div class="st-menu" id="statusMenu"></div>
+      </div>
+
+      <div class="small" id="memberSelected" style="margin-left:8px;"></div>
+    </div>
+
+    <!-- 右：検索 -->
+    <div class="bar-right">
+      <input id="q" placeholder="検索（見積番号/顧客名/案件概要など）" style="min-width:260px;"
+        onkeydown="if(event.key==='Enter') { state.page=1; loadCases_(); }" />
+
+      <button class="primary" onclick="loadCases_()">検索</button>
+    </div>
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <div class="card">
+    <div style="overflow:auto; max-height:80vh;">
+      <table id="tbl">
+          <colgroup>
+            <col style="width:3%">
+            <col style="width:10%">
+            <col style="width:6%">
+            <col style="width:13%">
+            <col style="width:13%">
+            <col style="width:8%">
+            <col style="width:20%">
+            <col style="width:20%">
+          </colgroup>
+        <thead><tr id="thead"></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="footer">
+      <div class="small" id="count"></div>
+    </div>
+  </div>
+</section>

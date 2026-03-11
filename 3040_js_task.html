@@ -1,0 +1,301 @@
+<script>
+function escapeHtml_(s){
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr_(s){
+  return escapeHtml_(s);
+}
+
+function formatTaskMemberDate_(v){
+  const s = String(v || '').trim();
+  if (!s) return '';
+
+  const m = s.match(/^(\d{4})\/(\d{2})\/(\d{2})/);
+  if (m) return `${m[1].slice(2)}/${m[2]}/${m[3]}`;
+
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}/${mm}/${dd}`;
+}
+
+function formatTaskDueInfo_(dateStr){
+  const s = String(dateStr || '').trim();
+  if (!s) return { dateText: '', diffText: '', diffClass: '' };
+
+  const m = s.match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+  if (!m) {
+    return { dateText: s, diffText: '', diffClass: '' };
+  }
+
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+
+  const due = new Date(y, mo - 1, d);
+  const today = new Date();
+  const base = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const diffDays = Math.floor((due - base) / 86400000);
+
+  let diffText = '';
+  let diffClass = '';
+
+  if (diffDays > 0) {
+    diffText = `あと${diffDays}日`;
+    diffClass = 'task-due-remain';
+  } else if (diffDays === 0) {
+    diffText = '今日';
+    diffClass = 'task-due-today';
+  } else {
+    diffText = `⚠️超過${Math.abs(diffDays)}日⚠️`;
+    diffClass = 'task-due-over';
+  }
+
+  return {
+    dateText: s,
+    diffText: diffText,
+    diffClass: diffClass
+  };
+}
+
+function renderTaskStatusBar_(status, progress, doneCount, targetCount){
+
+  const p = Math.max(0, Math.min(100, Math.round((progress || 0) * 100)));
+
+  let cls = "is-notstarted";
+  if(status === "完了") cls = "is-done";
+  else if(status === "対応中") cls = "is-working";
+
+  return `
+    <div class="task-status-wrap ${cls}">
+      <div class="task-status-head">
+        <span class="task-status-name">${escapeHtml_(status)}</span>
+        <span class="task-status-count">(${doneCount}/${targetCount})</span>
+      </div>
+
+      <div class="task-progress">
+        <div class="task-progress-bar" style="width:${p}%"></div>
+      </div>
+    </div>
+  `;
+}
+
+function openTaskModal(){
+  const modal = document.getElementById('taskModal');
+  if (!modal) return;
+  modal.setAttribute('aria-hidden', 'false');
+  modal.classList.add('open');
+}
+
+function closeTaskModal(){
+  const modal = document.getElementById('taskModal');
+  if (!modal) return;
+  modal.setAttribute('aria-hidden', 'true');
+  modal.classList.remove('open');
+}
+
+function saveTask(){
+  const data = {
+    task: document.getElementById('taskName')?.value?.trim() || '',
+    link: document.getElementById('taskLink')?.value?.trim() || '',
+    date: document.getElementById('taskDate')?.value || ''
+  };
+
+  if (!data.task) {
+    alert('タスクを入力してください');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (!res || !res.ok) {
+        alert(res?.error || '登録に失敗しました');
+        return;
+      }
+
+      const nameEl = document.getElementById('taskName');
+      const linkEl = document.getElementById('taskLink');
+      const dateEl = document.getElementById('taskDate');
+
+      if (nameEl) nameEl.value = '';
+      if (linkEl) linkEl.value = '';
+      if (dateEl) dateEl.value = '';
+
+      closeTaskModal();
+      loadTask();
+    })
+    .withFailureHandler(function(err){
+      console.error('api_addTask error', err);
+      alert('登録に失敗しました');
+    })
+    .api_addTask(data);
+}
+
+function loadTask(){
+  return new Promise(function(resolve, reject){
+    google.script.run
+      .withSuccessHandler(function(res){
+        console.log('api_getTask res', res);
+
+        const el = document.getElementById('taskList');
+        if (!el) {
+          resolve();
+          return;
+        }
+
+        if (!res || !res.ok) {
+          el.innerHTML = '<div class="task-empty">タスク取得に失敗しました<br>' + escapeHtml_(res?.error || '') + '</div>';
+          resolve(res);
+          return;
+        }
+
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const members = Array.isArray(res.members) ? res.members : [];
+        const loginUser = String(res.loginUser || '');
+
+        const memberHeadHtml = members.map(function(name){
+          const myCls = (loginUser && name === loginUser) ? ' task-member-me-head' : '';
+          return '<th class="task-member-col' + myCls + '">' + escapeHtml_(name) + '</th>';
+        }).join('');
+
+        let bodyHtml = '';
+
+        if (rows.length) {
+          bodyHtml = rows.map(function(r){
+            const due = formatTaskDueInfo_(r.date);
+
+            const memberTd = members.map(function(name){
+              const v = r.members?.[name] || '';
+              const checked = !!v;
+              const myCls = (loginUser && name === loginUser) ? ' task-member-me-cell' : '';
+
+              return `
+                <td class="task-member-cell${myCls}">
+                  <label class="task-check-wrap">
+                    <input
+                      type="checkbox"
+                      ${checked ? 'checked' : ''}
+                      onchange="toggleTaskMemberCheck_(this, '${escapeAttr_(r.no)}', '${escapeAttr_(name)}')"
+                    >
+                    <span class="task-check-time">${escapeHtml_(formatTaskMemberDate_(v))}</span>
+                  </label>
+                </td>
+              `;
+            }).join('');
+
+            return `
+              <tr>
+                <td>${escapeHtml_(r.no)}</td>
+                <td>${
+                  r.link
+                    ? `<a href="${escapeAttr_(r.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml_(r.task)}</a>`
+                    : escapeHtml_(r.task)
+                }</td>
+                <td>
+                  <div class="task-due-wrap">
+                    <div class="task-due-date">${escapeHtml_(due.dateText)}</div>
+                    <div class="task-due-sub ${escapeAttr_(due.diffClass)}">${escapeHtml_(due.diffText)}</div>
+                  </div>
+                </td>
+                <td>${renderTaskStatusBar_(r.status, r.progress, r.doneCount, r.targetCount)}</td>
+                ${memberTd}
+              </tr>
+            `;
+          }).join('');
+        } else {
+          bodyHtml = `
+            <tr>
+              <td colspan="${4 + members.length}" class="task-empty">表示するタスクはありません</td>
+            </tr>
+          `;
+        }
+
+        el.innerHTML = `
+          <div class="task-login-user">ログイン: ${escapeHtml_(loginUser || '-')}</div>
+          <div class="task-table-shell">
+            <div class="task-table-wrap">
+              <table class="task-table">
+                <thead>
+                  <tr>
+                    <th>No</th>
+                    <th>タスク</th>
+                    <th>期日</th>
+                    <th>ステータス</th>
+                    ${memberHeadHtml}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${bodyHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        `;
+
+        resolve(res);
+      })
+      .withFailureHandler(function(err){
+        console.error('api_getTask error', err);
+        const el = document.getElementById('taskList');
+        if (el) {
+          el.innerHTML = '<div class="task-empty">タスク取得エラー<br>' + escapeHtml_(err?.message || String(err || '')) + '</div>';
+        }
+        reject(err);
+      })
+      .api_getTask();
+  });
+}
+
+function toggleTaskMemberCheck_(cb, no, memberName){
+  const checked = !!cb.checked;
+  cb.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (!res || !res.ok) {
+        alert(res?.error || '更新に失敗しました');
+        cb.checked = !checked;
+        cb.disabled = false;
+        return;
+      }
+
+      const row = cb.closest('tr');
+      const wrap = cb.closest('.task-check-wrap');
+      const timeEl = wrap ? wrap.querySelector('.task-check-time') : null;
+
+      if (timeEl) {
+        timeEl.textContent = formatTaskMemberDate_(res.value || '');
+      }
+
+      if (row) {
+        const statusCell = row.children[3];
+        if (statusCell) {
+          statusCell.innerHTML = renderTaskStatusBar_(
+            res.status,
+            res.progress,
+            res.doneCount,
+            res.targetCount
+          );
+        }
+      }
+
+      cb.disabled = false;
+    })
+    .withFailureHandler(function(err){
+      console.error('api_updateTaskMemberCheck error', err);
+      alert('更新に失敗しました');
+      cb.checked = !checked;
+      cb.disabled = false;
+    })
+    .api_updateTaskMemberCheck(no, memberName, checked);
+}
+</script>

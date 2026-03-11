@@ -1,0 +1,230 @@
+<style>
+/* ===============================
+   Info Hub 専用スタイル
+   prefix: .infohub-
+   他画面に影響しない設計
+================================ */
+
+/* ---------- レイアウト ---------- */
+.infohub-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:16px;
+}
+
+.infohub-head{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  flex-wrap:wrap;
+}
+
+.infohub-title h2{
+  margin:0;
+  font-size:18px;
+  font-weight:600;
+}
+
+.infohub-meta{
+  font-size:12px;
+  color:var(--sub);
+  margin-top:4px;
+}
+
+/* ---------- タブ ---------- */
+.infohub-tabs{
+  align-items:left;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.infohub-tab{
+  padding:6px 14px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:13px;
+  cursor:pointer;
+  transition:.15s ease;
+}
+
+.infohub-tab:hover{
+  border-color:var(--pri);
+  color:var(--pri);
+}
+
+.infohub-tab.is-active{
+  border-color:var(--pri);
+  background:var(--pri-soft);
+  color:var(--pri);
+  font-weight:600;
+}
+
+/* ---------- タブ中身 ---------- */
+.infohub-pane{
+  display:none;
+  margin-top:14px;
+}
+
+.infohub-pane.is-active{
+  display:block;
+}
+
+/* ---------- ツールバー ---------- */
+.infohub-toolbar{
+  display:flex;
+  gap:12px;
+  margin-bottom:12px;
+  flex-wrap:wrap;
+}
+
+.infohub-checkbox{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  font-size:13px;
+  cursor:pointer;
+}
+
+.infohub-btn{
+  padding:6px 12px;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:13px;
+  cursor:pointer;
+  transition:.15s ease;
+}
+
+.infohub-btn:hover{
+  border-color:var(--pri);
+  color:var(--pri);
+}
+
+/* ---------- テーブル ---------- */
+.infohub-tablewrap{
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:auto;
+  background:#fff;
+}
+
+.infohub-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+
+.infohub-table th,
+.infohub-table td{
+  padding:8px 10px;
+  border-bottom:1px solid var(--line);
+  white-space: nowrap;     /* ★基本はnowrap */
+}
+
+.infohub-table thead th{
+  background:#f3f4f6;          /* グレー */
+  color: var(--text);
+  text-align: center;
+  position:sticky;
+  top:0;
+  z-index:2;
+  font-weight:600;
+}
+
+.infohub-table tbody tr:hover{
+  background:#f9fafb;
+}
+
+.infohub-table td.infohub-ml{
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* ---------- 状態ピル ---------- */
+.infohub-pill{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid var(--line);
+}
+
+.infohub-pill.ok{
+  color:#065f46;
+  border-color:rgba(6,95,70,.35);
+  background:rgba(6,95,70,.08);
+}
+
+.infohub-pill.hidden{
+  color:#b91c1c;
+  border-color:rgba(185,28,28,.35);
+  background:rgba(185,28,28,.08);
+}
+
+/* ---------- リンク ---------- */
+.infohub-link{
+  color:var(--pri);
+  text-decoration:none;
+}
+
+.infohub-link:hover{
+  text-decoration:underline;
+}
+
+/* ---------- レスポンシブ ---------- */
+@media (max-width: 900px){
+  .infohub-head{
+    align-items:flex-start;
+  }
+}
+
+@media (max-width: 600px){
+  .infohub-table th:nth-child(6),
+  .infohub-table td:nth-child(6){
+    display:none; /* 最大行×列は小画面では隠す */
+  }
+}
+
+.infohub-input{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:6px 10px;
+  font-size:13px;
+  min-width:220px;
+  background:#fff;
+}
+.infohub-input:focus{
+  outline:none;
+  border-color:var(--pri);
+  box-shadow:0 0 0 3px var(--pri-soft);
+}
+.infohub-title{ display:flex; flex-direction:column; gap:4px; }
+
+/* ===== 改行させたいセル用 ===== */
+.infohub-ml{
+  white-space: pre-wrap;      /* 改行を反映 */
+  word-break: break-word;     /* 長文折返し */
+  line-height: 1.4;
+}
+
+/* ===== 右上ステータス ===== */
+.infohub-right{
+  margin-left:auto;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:8px;
+}
+
+.infohub-meta{
+  font-size:12px;
+  color:var(--sub);
+  text-align:right;
+  padding:2px 6px;
+}
+
+</style>

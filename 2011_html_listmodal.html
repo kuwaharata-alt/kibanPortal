@@ -1,0 +1,102 @@
+<!-- ===== Unified Modal ===== -->
+<div id="modalStatus"
+     class="modal"
+     aria-hidden="true"
+     data-key=""
+     data-type=""
+     data-idxcustomer=""
+     data-tab="detail">
+
+  <div class="modal-bg" onclick="closeUnifiedModal_()"></div>
+
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="stTitle">
+
+    <!-- Header -->
+    <div class="modal-head">
+      <div>
+        <div id="stTitle" class="modal-title">読み込み中...</div>
+        <div id="stMeta" class="modal-meta"></div>
+        <div id="stErr" class="modal-err"></div>
+      </div>
+      <button type="button" class="iconbtn" onclick="closeUnifiedModal_()" aria-label="閉じる">×</button>
+    </div>
+
+    <!-- Top Tabs -->
+    <div id="stTabs" class="st-tabs">
+      <button type="button" class="st-tab is-active" data-tab="detail" onclick="switchUnifiedTab_('detail')">詳細</button>
+      <button type="button" class="st-tab" data-tab="status" onclick="switchUnifiedTab_('status')">更新：ステータス</button>
+      <button type="button" class="st-tab" data-tab="input" onclick="switchUnifiedTab_('input')">更新：案件情報</button>
+      <span class="st-tab-spacer"></span>
+    </div>
+
+    <div class="modal-body">
+      <section id="stPanelDetail" class="st-panel">
+        <div id="detailMount"></div>
+      </section>
+
+      <section id="stPanelStatus" class="st-panel is-hidden">
+        <form id="form-status" onsubmit="return false;">
+          <div id="stSections"></div>
+        </form>
+      </section>
+
+      <section id="stPanelInput" class="st-panel is-hidden">
+        <form id="form-input" onsubmit="return false;"></form>
+      </section>
+    </div>
+
+    <div class="modal-foot">
+      <button type="button" class="btn" onclick="closeUnifiedModal_()">キャンセル</button>
+      <button type="button" id="btnUnifiedSave" class="btn btn-primary" onclick="saveUnifiedModal_()">保存</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== Templates ===== -->
+<template id="tpl-st-sec">
+  <section class="st-sec">
+    <div class="st-secHead">
+      <div class="st-secTitle" data-st="bigTitle"></div>
+      <div class="st-secRight" data-st="rightArea"></div>
+    </div>
+    <div class="st-secBody">
+      <div class="st-block" data-st="block"></div>
+    </div>
+  </section>
+</template>
+
+<template id="tpl-st-row">
+  <div class="st-row">
+    <div class="st-label" data-st="label"></div>
+    <select class="fctrl" data-st="select">
+      <option value="">（未選択）</option>
+    </select>
+  </div>
+</template>
+
+<template id="tpl-st-na">
+  <select class="fctrl" data-st="naSelect"></select>
+</template>
+
+<template id="tpl-st-na-fixed">
+  <span class="pill" data-st="naFixed">対応有（固定）</span>
+</template>
+
+<template id="tpl-st-date">
+  <input class="fctrl st-date" type="date" data-st="date" />
+</template>
+
+<template id="tpl-st-comment">
+  <div class="st-row st-row-comment">
+    <div class="st-label">
+      <span data-st="commentLabel">コメント</span>
+    </div>
+    <div class="st-ctrl">
+      <textarea class="fctrl st-comment"
+                data-st="comment"
+                rows="3"
+                placeholder="補足・連絡事項など"></textarea>
+    </div>
+  </div>
+</template>

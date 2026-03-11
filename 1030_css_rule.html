@@ -1,0 +1,136 @@
+<style>
+  /* ===== Rule Panel (scoped) ===== */
+  #panel-rule{
+    font-family: system-ui, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    margin: 14px;
+  }
+
+  /* ===== 既存ポータルCSS（縦flex/auto余白）の影響を rule だけ切る ===== */
+  #panel-rule .portal,
+  #panel-rule .wrap{
+    display:block !important;
+    height:auto !important;
+    min-height:0 !important;
+  }
+
+  /* ===== Tabs / Bars ===== */
+  #panel-rule .rule-tabs{
+    display:flex;
+    gap:8px;
+    margin:10px 0 12px;
+    flex-wrap:wrap;
+    align-items:center;
+
+    /* 念のため「下固定」系が当たっても無効化 */
+    position:static !important;
+    bottom:auto !important;
+  }
+  #panel-rule .rule-flex-spacer{ flex:1; }
+
+  #panel-rule .rule-bar{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    margin-bottom:10px;
+    margin-top:0 !important; /* auto余白殺し */
+  }
+
+  /* ===== Inputs ===== */
+  #panel-rule select,
+  #panel-rule input,
+  #panel-rule textarea{
+    padding:8px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    box-sizing:border-box;
+  }
+
+  /* ===== Buttons ===== */
+  #panel-rule button{
+    padding:8px 12px;
+    border:1px solid #ccc;
+    border-radius:8px;
+    background:#fff;
+    cursor:pointer;
+  }
+  #panel-rule .rule-primary{
+    border-color:#1a73e8;
+  }
+
+  /* ===== Tables ===== */
+  #panel-rule .rule-table{
+    width:100%;
+    border-collapse:collapse;
+  }
+  #panel-rule .rule-table th,
+  #panel-rule .rule-table td{
+    border:1px solid #ddd;
+    padding:8px;
+    vertical-align:top;
+  }
+  #panel-rule .rule-table th{
+    background:#f5f5f5;
+    text-align:left;
+  }
+
+  /* ===== Helpers ===== */
+  #panel-rule .rule-muted{
+    color:#666;
+    font-size:12px;
+  }
+  #panel-rule .rule-pill{
+    display:inline-block;
+    padding:2px 8px;
+    border-radius:999px;
+    background:#eee;
+    font-size:12px;
+  }
+  #panel-rule .rule-row-disabled{
+    opacity:0.5;
+  }
+
+  /* ===== Dialog ===== */
+  #panel-rule .rule-dialog{
+    border:1px solid #ccc;
+    border-radius:12px;
+    padding:14px;
+    width:min(720px, 96vw);
+  }
+  #panel-rule .rule-dialog::backdrop{
+    background: rgba(0,0,0,0.25);
+  }
+  #panel-rule .rule-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  #panel-rule .rule-grid .full{
+    grid-column:1 / -1;
+  }
+  #panel-rule textarea{
+    width:100%;
+    min-height:120px;
+  }
+
+  #panel-rule .rule-tabs{
+  display:flex;
+  gap:8px;
+  margin:10px 0 12px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+#panel-rule .rule-flex-spacer{ flex:1; }
+
+#panel-rule .portal.wrap{
+  display:block !important;
+  height:auto !important;
+  min-height:0 !important;
+}
+
+/* 念のため：もし flex で下寄せされてるなら殺す */
+#panel-rule .portal.wrap{
+  justify-content:flex-start !important;
+  align-items:stretch !important;
+}
+</style>

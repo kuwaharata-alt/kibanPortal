@@ -1,0 +1,31 @@
+<section id="panel-task" class="panel">
+  <div class="bar wrap">
+    <button type="button" class="task-add-btn" onclick="openTaskModal()">＋ タスク登録</button>
+  </div>
+
+  <div id="taskList"></div>
+</section>
+
+<div id="taskModal" class="task-modal" aria-hidden="true">
+  <div class="task-modal-box">
+    <div class="task-modal-head">
+      <h3>タスク登録</h3>
+      <button type="button" class="close-btn" onclick="closeTaskModal()">×</button>
+    </div>
+
+    <div class="task-modal-body">
+      <label for="taskName">タスク</label>
+      <input id="taskName" type="text">
+
+      <label for="taskLink">リンク</label>
+      <input id="taskLink" type="text">
+
+      <label for="taskDate">期日</label>
+      <input id="taskDate" type="date">
+    </div>
+
+    <div class="task-modal-foot">
+      <button type="button" onclick="saveTask()">登録</button>
+    </div>
+  </div>
+</div>

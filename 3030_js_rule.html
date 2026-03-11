@@ -1,0 +1,431 @@
+<script>
+window.addEventListener('load', async () => {
+  ensureRuleTabs_();     // ★これを最初に
+  await loadMeta();
+  await goViewTab('基盤ルール');
+});
+
+function ensureRuleTabs_(){
+  const panel = document.getElementById('panel-rule');
+  const wrap  = panel ? panel.querySelector('.wrap') : null;
+  const bar   = document.getElementById('barView');
+  if (!panel || !wrap || !bar) return;
+
+  // 既にあれば何もしない
+  if (wrap.querySelector('.rule-tabs')) return;
+
+  // tabs枠を作る
+  const tabs = document.createElement('div');
+  tabs.className = 'rule-tabs';
+
+  const spacer = document.createElement('span');
+  spacer.className = 'rule-flex-spacer';
+
+  // いま barView の中にいるタブ達を集める
+  const ids = ['tab_base','tab_sv','tab_cl','tab_kanri','tab_syutyo','tab_history','tab_edit'];
+  const el = (id) => document.getElementById(id);
+
+  // 追加順
+  ['tab_base','tab_sv','tab_cl','tab_kanri','tab_syutyo'].forEach(id => { if (el(id)) tabs.appendChild(el(id)); });
+  tabs.appendChild(spacer);
+  ['tab_history','tab_edit'].forEach(id => { if (el(id)) tabs.appendChild(el(id)); });
+
+  // barView の “直前” に挿入（これで上に来る）
+  wrap.insertBefore(tabs, bar);
+}
+
+
+  // ===== Category 色定義 =====
+  const CATEGORY_COLORS = {
+    '基盤ルール': { tab:'#2E7D32', bg:'#E8F5E9', border:'#43A047' },
+    'SV案件ルール': { tab:'#1565C0', bg:'#E3F2FD', border:'#1E88E5' },
+    'CL案件ルール': { tab:'#EF6C00', bg:'#FFF3E0', border:'#FB8C00' },
+    '案件管理表ルール': { tab:'#6A1B9A', bg:'#F3E5F5', border:'#8E24AA' },
+  };
+  const DEFAULT_COLOR = { tab:'#616161', bg:'#F5F5F5', border:'#9E9E9E' };
+
+  const $r = (id) => document.getElementById(id);
+  let cache = [];
+
+  // mode: view / edit / history
+  let mode = 'view';
+  let currentCategory = '基盤ルール';
+
+  window.addEventListener('load', async () => {
+    await loadMeta();
+    await goViewTab('基盤ルール');
+  });
+
+  function setStatus(msg) { $r('status').textContent = msg || ''; }
+
+  function run_(fnName, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler((res) => resolve(res))
+        .withFailureHandler((err) => reject(err))
+        [fnName](...args);
+    });
+  }
+
+  function setActiveTabUI_() {
+    const tabs = [
+      { id:'tab_base',  cat:'基盤ルール' },
+      { id:'tab_sv',    cat:'SV案件ルール' },
+      { id:'tab_cl',    cat:'CL案件ルール' },
+      { id:'tab_kanri', cat:'案件管理表ルール' },
+    ];
+
+    tabs.forEach(t => {
+      const el = $r(t.id);
+      if (!el) return;
+      const c = CATEGORY_COLORS[t.cat] || DEFAULT_COLOR;
+
+      if (mode === 'view' && currentCategory === t.cat) {
+        el.style.background = c.tab;
+        el.style.color = '#fff';
+        el.style.borderColor = c.tab;
+        el.style.fontWeight = '800';
+      } else {
+        el.style.background = '#fff';
+        el.style.color = c.tab;
+        el.style.borderColor = c.tab;
+        el.style.fontWeight = '600';
+      }
+    });
+
+    const edit = $r('tab_edit');
+    if (edit) {
+      if (mode === 'edit') {
+        edit.style.background = '#424242';
+        edit.style.color = '#fff';
+        edit.style.borderColor = '#424242';
+        edit.style.fontWeight = '800';
+      } else {
+        edit.style.background = '#fff';
+        edit.style.color = '#424242';
+        edit.style.borderColor = '#ccc';
+        edit.style.fontWeight = '600';
+      }
+    }
+
+    const hist = $r('tab_history');
+    if (hist) {
+      if (mode === 'history') {
+        hist.style.background = '#424242';
+        hist.style.color = '#fff';
+        hist.style.borderColor = '#424242';
+        hist.style.fontWeight = '800';
+      } else {
+        hist.style.background = '#fff';
+        hist.style.color = '#424242';
+        hist.style.borderColor = '#ccc';
+        hist.style.fontWeight = '600';
+      }
+    }
+  }
+
+  function applyModeUI_() {
+    $r('barView').style.display = (mode === 'view') ? '' : 'none';
+    $r('viewWrap').style.display = (mode === 'view') ? '' : 'none';
+
+    $r('barEdit').style.display = (mode === 'edit') ? '' : 'none';
+    $r('editWrap').style.display = (mode === 'edit') ? '' : 'none';
+
+    $r('barHistory').style.display = (mode === 'history') ? '' : 'none';
+    $r('historyWrap').style.display = (mode === 'history') ? '' : 'none';
+
+    try { $r('dlg').close(); } catch(e) {}
+  }
+
+  async function loadMeta() {
+    try {
+      const r = await run_('ui_meta');
+      if (!r.ok) return;
+
+      const secSel = $r('section');
+      r.data.sections.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s; opt.textContent = `Section: ${s}`;
+        secSel.appendChild(opt);
+      });
+
+      const secSel2 = $r('sectionEdit');
+      r.data.sections.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s; opt.textContent = `Section: ${s}`;
+        secSel2.appendChild(opt);
+      });
+    } catch (e) {}
+  }
+
+  async function goViewTab(category) {
+    mode = 'view';
+    currentCategory = category;
+    setActiveTabUI_();
+    applyModeUI_();
+    $r('enabled').value = $r('enabled').value || 'true';
+    await reload();
+  }
+
+  async function goEditTab() {
+    mode = 'edit';
+    setActiveTabUI_();
+    applyModeUI_();
+    await reload();
+  }
+
+  async function goHistoryTab() {
+    mode = 'history';
+    setActiveTabUI_();
+    applyModeUI_();
+    await reloadHistory();
+  }
+
+  function getFilters_() {
+    if (mode === 'view') {
+      return {
+        category: currentCategory,
+        section: $r('section').value || '',
+        enabled: $r('enabled').value || '',
+        q: $r('q').value.trim(),
+      };
+    }
+    if (mode === 'edit') {
+      return {
+        category: $r('category').value || '',
+        section: $r('sectionEdit').value || '',
+        enabled: $r('enabledEdit').value || '',
+        q: $r('qEdit').value.trim(),
+      };
+    }
+    return {};
+  }
+
+  async function reload() {
+    setStatus('読み込み中...');
+    try {
+      const f = getFilters_();
+      const r = await run_('ui_list', f);
+      if (!r.ok) { setStatus('取得失敗'); return; }
+
+      cache = r.data || [];
+      if (mode === 'view') renderView_();
+      else if (mode === 'edit') renderEdit_();
+
+      setStatus(`OK：${cache.length}件`);
+    } catch (e) {
+      setStatus('取得失敗: ' + (e.message || e));
+    }
+  }
+
+  async function reloadHistory() {
+    setStatus('履歴 読み込み中...');
+    try {
+      const limit = Number($r('historyLimit').value || 200);
+      const r = await run_('ui_history_list', { limit });
+      if (!r.ok) { setStatus('履歴取得失敗'); return; }
+      renderHistory_(r.data || []);
+      setStatus(`履歴 OK：${(r.data || []).length}件`);
+    } catch (e) {
+      setStatus('履歴取得失敗: ' + (e.message || e));
+    }
+  }
+
+  function renderHistory_(rows) {
+    const tb = $r('historyBody');
+    tb.innerHTML = '';
+
+    rows.forEach(h => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td>${Number(h.No || 0)}</td>` +
+        `<td>${Number(h.SortNo || 0)}</td>` +
+        `<td>${escapeHtml(h['変更箇所'] || '')}</td>` +
+        `<td style="white-space:pre-wrap;">${escapeHtml(h['旧内容'] || '')}</td>` +
+        `<td style="white-space:pre-wrap;">${escapeHtml(h['新内容'] || '')}</td>` +
+        `<td class="muted">${escapeHtml(h['更新者'] || '')}</td>` +
+        `<td class="muted">${escapeHtml(h['更新日'] || '')}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+
+  // ====== VIEW: Sectionごとにひとまとまり表示（内容/備考のみ） ======
+  function renderView_() {
+    const wrap = $r('viewWrap');
+    wrap.innerHTML = '';
+
+    const groups = new Map();
+    for (const o of cache) {
+      const sec = o.Section || '(Sectionなし)';
+      if (!groups.has(sec)) groups.set(sec, []);
+      groups.get(sec).push(o);
+    }
+
+    for (const [sec, items] of groups.entries()) {
+      const color = CATEGORY_COLORS[currentCategory] || DEFAULT_COLOR;
+
+      const box = document.createElement('div');
+      box.style.borderRadius = '12px';
+      box.style.padding = '14px';
+      box.style.margin = '14px 0';
+      box.style.background = color.bg;
+      box.style.borderLeft = `6px solid ${color.border}`;
+
+      const h = document.createElement('div');
+      h.style.display = 'flex';
+      h.style.alignItems = 'baseline';
+      h.style.gap = '10px';
+      h.innerHTML =
+        `<div style="font-size:16px; font-weight:800; color:${color.border};">${escapeHtml(sec)}</div>` +
+        `<div class="muted">${items.length}件</div>`;
+      box.appendChild(h);
+
+      items
+        .slice()
+        .sort((a,b) => Number(a.Sort||0) - Number(b.Sort||0))
+        .forEach((o, idx) => {
+          const displayNo = idx + 1;
+
+          const row = document.createElement('div');
+          row.style.borderTop = '1px dashed #ddd';
+          row.style.paddingTop = '10px';
+          row.style.marginTop = '10px';
+
+          row.innerHTML =
+            `<div style="display:grid; grid-template-columns:36px 1fr; gap:12px; align-items:start;">` +
+              `<div style="text-align:center; font-weight:700; color:${color.border}; font-size:14px; padding-top:4px;">${displayNo}</div>` +
+              `<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">` +
+                `<div style="background:#fff; border-radius:8px; padding:10px 12px; white-space:pre-wrap; font-weight:600;">${escapeHtml(o.Content || '')}</div>` +
+                `<div style="background:#fff; border-radius:8px; padding:10px 12px;">` +
+                  `<div class="muted" style="font-weight:700; margin-bottom:4px;">備考</div>` +
+                  `<div style="white-space:pre-wrap; color:#555;">${escapeHtml(o.Note || '')}</div>` +
+                `</div>` +
+              `</div>` +
+            `</div>`;
+
+          box.appendChild(row);
+        });
+
+      wrap.appendChild(box);
+    }
+  }
+
+  // ====== EDIT: 従来の表（登録/編集/有効無効） ======
+  function renderEdit_() {
+    const tb = $r('tbody');
+    tb.innerHTML = '';
+
+    cache.forEach(o => {
+      const tr = document.createElement('tr');
+      if (!o.Enabled) tr.classList.add('row-disabled');
+
+      tr.innerHTML =
+        `<td>` +
+          `<button onclick="openEdit('${o.ID}')">編集</button> ` +
+          `<button onclick="toggleRow('${o.ID}', ${o.Enabled ? 'false' : 'true'})">${o.Enabled ? '無効' : '有効'}</button>` +
+        `</td>` +
+        `<td><span class="pill">${escapeHtml(o.ID)}</span></td>` +
+        `<td>${escapeHtml(o.Category)}</td>` +
+        `<td>${escapeHtml(o.Section)}</td>` +
+        `<td style="white-space:pre-wrap;">${escapeHtml(o.Content || '')}</td>` +
+        `<td style="white-space:pre-wrap;">${escapeHtml(o.Note || '')}</td>` +
+        `<td>${Number(o.Sort || 0)}</td>` +
+        `<td>${o.Enabled ? 'TRUE' : 'FALSE'}</td>` +
+        `<td class="muted">${escapeHtml(o.UpdateBy || '')}</td>` +
+        `<td class="muted">${escapeHtml(o.UpdateAt || '')}</td>`;
+
+      tb.appendChild(tr);
+    });
+  }
+
+  // ====== 編集ダイアログ ======
+  function openNew() {
+    $r('dlgTitle').textContent = '新規作成';
+    $r('fID').value = '';
+    $r('fCategory').value = $r('category').value || '基盤ルール';
+    $r('fSection').value = '';
+    $r('fContent').value = '';
+    $r('fNote').value = '';
+    $r('fSort').value = ''; // 空なら自動採番
+    $r('fEnabled').value = 'true';
+    $r('dlgMsg').textContent = '';
+    $r('dlg').showModal();
+  }
+
+  function openEdit(id) {
+    const o = cache.find(x => x.ID === id);
+    if (!o) return;
+
+    $r('dlgTitle').textContent = '編集';
+    $r('fID').value = o.ID;
+    $r('fCategory').value = o.Category || '基盤ルール';
+    $r('fSection').value = o.Section || '';
+    $r('fContent').value = o.Content || '';
+    $r('fNote').value = o.Note || '';
+    $r('fSort').value = (o.Sort ?? '');
+    $r('fEnabled').value = o.Enabled ? 'true' : 'false';
+    $r('dlgMsg').textContent = '';
+    $r('dlg').showModal();
+  }
+
+  function closeDlg() { $r('dlg').close(); }
+
+  async function save() {
+    $r('dlgMsg').textContent = '保存中...';
+
+    const sortRaw = String($r('fSort').value || '').trim();
+    const data = {
+      ID: $r('fID').value.trim(),
+      Category: $r('fCategory').value.trim(),
+      Section: $r('fSection').value.trim(),
+      Content: $r('fContent').value,
+      Note: $r('fNote').value,
+      Sort: sortRaw === '' ? '' : Number(sortRaw),
+      Enabled: $r('fEnabled').value === 'true',
+    };
+
+    try {
+      const r = await run_('ui_upsert', data);
+
+      if (!r || !r.ok) {
+        $r('dlgMsg').textContent = '保存失敗：' + (r && r.message ? r.message : 'unknown');
+        return;
+      }
+
+      if (r.warnings && r.warnings.length) {
+        $r('dlgMsg').textContent = '保存OK（履歴の書き込みに失敗）';
+      } else {
+        $r('dlgMsg').textContent = '保存OK';
+      }
+
+      // 画面反映
+      $r('dlg').close();
+      await reload();
+
+    } catch (e) {
+      $r('dlgMsg').textContent = '保存失敗：' + (e.message || e);
+    }
+  }
+
+
+  async function toggleRow(id, enabled) {
+    if (!confirm(`${id} を ${enabled ? '有効' : '無効'} にします。よろしいですか？`)) return;
+    setStatus('更新中...');
+    try {
+      const r = await run_('ui_toggle', id, enabled);
+      if (!r.ok) { setStatus('更新失敗'); return; }
+      await reload();
+    } catch (e) {
+      setStatus('更新失敗: ' + (e.message || e));
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replaceAll('&','&amp;')
+      .replaceAll('<','&lt;')
+      .replaceAll('>','&gt;')
+      .replaceAll('"','&quot;')
+      .replaceAll("'","&#39;");
+  }
+</script>

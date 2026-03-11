@@ -1,0 +1,125 @@
+<section id="panel-plan" class="panel">
+  <!-- ===== Tabs ===== -->
+  <section class="plan-tabs">
+    <button type="button" class="plan-tab is-active" data-tab="personal" id="tabPlanPersonal">
+      個人登録
+    </button>
+    <button type="button" class="plan-tab" data-tab="summary" id="tabPlanSummary">
+      全体表示
+    </button>
+  </section>
+  
+  <!-- ===================================================== -->
+  <!-- Panel: Personal -->
+  <!-- ===================================================== -->
+  <section class="plan-panel is-active" id="planPanelPersonal">
+    <div class="plan-card">
+      <div class="plan-card-head">
+        <div>
+          <h3 class="plan-card-title">個人予定登録</h3>
+          <div class="plan-card-sub">※終日同じ予定の場合はAMのみ登録してください</div>
+        </div>
+
+        <div class="plan-topbar-right">
+          <div class="plan-meta" id="planMeta"></div>
+          <div class="plan-err" id="planErr"></div>
+        </div>
+      </div>
+
+      <!-- ===== Toolbar ===== -->
+      <section class="plan-toolbar">
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planTargetMonth">対象月</label>
+          <input type="month" id="planTargetMonth" class="plan-input plan-input-month">
+        </div>
+
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planRange">表示期間</label>
+          <select id="planRange" class="plan-select">
+            <option value="1">1か月</option>
+            <option value="2" selected>2か月</option>
+            <option value="3">3か月</option>
+          </select>
+        </div>
+
+        <div class="plan-toolbar-group" id="planMemberBox">
+          <label class="plan-label" for="planMember">メンバー</label>
+          <select id="planMember" class="plan-select">
+            <option value="">選択してください</option>
+          </select>
+        </div>
+
+        <div class="plan-toolbar-actions">
+          <button type="button" class="plan-btn" id="btnPlanSavePersonal">保存</button>
+        </div>
+      </section>
+
+      <div class="plan-table-wrap">
+        <table class="plan-table plan-table-personal" id="planPersonalTable">
+          <thead>
+            <tr>
+              <th rowspan="2" colspan="2" class="plan-col-date">日付</th>
+              <th colspan="4" class="plan-th-block">AM</th>
+              <th colspan="4" class="plan-th-block">PM</th>
+            </tr>
+            <tr>
+              <th class="plan-col-status">ステータス</th>
+              <th class="plan-col-location">勤務場所</th>
+              <th class="plan-col-vacation">休暇</th>
+              <th class="plan-col-customer">対応顧客名</th>
+
+              <th class="plan-col-status">ステータス</th>
+              <th class="plan-col-location">勤務場所</th>
+              <th class="plan-col-vacation">休暇</th>
+              <th class="plan-col-customer">対応顧客名</th>
+            </tr>
+          </thead>
+          <tbody id="planPersonalBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================== -->
+  <!-- Panel: Summary -->
+  <!-- ===================================================== -->
+  <section class="plan-panel" id="planPanelSummary">
+    <div class="plan-card">
+      <div class="plan-card-head">
+        <div>
+          <h3 class="plan-card-title">予定管理表</h3>
+        </div>
+        <div class="plan-topbar-right">
+          <div class="plan-meta" id="planMeta">準備完了</div>
+          <div class="plan-err" id="planErr"></div>
+        </div>
+      </div>
+
+      <!-- ===== Toolbar ===== -->
+      <section class="plan-toolbar">
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planTargetMonth2">対象月</label>
+          <input type="month" id="planTargetMonth2" class="plan-input plan-input-month">
+        </div>
+
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planRange2">表示期間</label>
+          <select id="planRange2" class="plan-select">
+            <option value="1" selected>1か月</option>
+            <option value="2">2か月</option>
+            <option value="3">3か月</option>
+          </select>
+        </div>
+      </section>
+
+      <div class="plan-table-wrap">
+        <table class="plan-table plan-table-summary" id="planSummaryTable">
+          <thead id="planSummaryHead"></thead>
+          <tbody id="planSummaryBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+
+</section>

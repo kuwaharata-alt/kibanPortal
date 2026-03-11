@@ -1,0 +1,252 @@
+<script>
+window.OperationState = window.OperationState || { edit:false };
+
+document.addEventListener('click', (e)=>{
+  const btn = e.target.closest('#btnOpEdit');
+  if(!btn) return;
+
+  window.OperationState.edit = !window.OperationState.edit;
+
+  btn.classList.toggle('is-on', window.OperationState.edit);
+  btn.textContent = window.OperationState.edit ? '編集ON' : '編集';
+
+  console.log('[op] edit=', window.OperationState.edit);
+
+  applyEditMode_();
+});
+
+async function loadOperationDashboard(){
+  const a = document.getElementById('op-main');
+  const b = document.getElementById('op-sv');
+  const c = document.getElementById('op-cl');
+
+  if(a) a.textContent = '読み込み中...';
+  if(b) b.textContent = '読み込み中...';
+  if(c) c.textContent = '読み込み中...';
+
+  await loadOp('稼働状況', 'op-main');
+  await loadOp('SV大型案件', 'op-sv');
+  await loadOp('CL大型案件', 'op-cl');
+
+  initOpEditToggle_(); // ★追加
+  applyEditMode_();    // ★初期状態を反映（デフォは編集OFF）
+}
+
+const LEVEL_OPTIONS = [
+  '-', '低', '中', '高', '最優先'
+];
+
+/* ===== トースト ===== */
+function toast_(type, title, msg){
+  const host = document.getElementById('opToast');
+  if(!host) return;
+
+  const el = document.createElement('div');
+  el.className = `toast ${type||''}`;
+  el.innerHTML = `
+    <div class="t-title">${escapeHtml_(title||'')}</div>
+    ${msg ? `<div>${escapeHtml_(msg)}</div>` : ``}
+    <small>${new Date().toLocaleString()}</small>
+  `;
+  host.appendChild(el);
+
+  // 自動消滅（3.5秒）
+  setTimeout(()=>{ el.remove(); }, 3500);
+}
+
+function gsRun_(fn, payload){
+  return new Promise((resolve,reject)=>{
+    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](payload);
+  });
+}
+
+function escapeHtml_(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+async function loadOperationDashboard(){
+  await loadOp('稼働状況', 'op-main');
+  await loadOp('SV大型案件', 'op-sv');
+  await loadOp('CL大型案件', 'op-cl');
+}
+
+async function loadOp(sheetName, targetId){
+  const box = document.getElementById(targetId);
+  if(!box) return;
+
+  box.textContent = '読み込み中...';
+
+  const res = await gsRun_('api_getOperationSheet', { sheetName });
+
+  if(!res?.ok){
+    box.textContent = 'エラー: ' + (res?.error || 'unknown');
+    toast_('ng', '読み込み失敗', res?.error || 'unknown');
+    return;
+  }
+
+  const headers = res.headers || [];
+  const rowsObj = res.rows || []; // [{r, v}]
+  const isKado  = (sheetName === '稼働状況');
+
+  // 列index（ヘッダー名固定）
+  const iCat   = headers.indexOf('カテゴリ');
+  const iLevel = headers.indexOf('レベル');
+  const ipeer = headers.indexOf('期間');
+  const iStat  = headers.indexOf('稼働状況');
+  const iUpd   = headers.indexOf('更新日');
+
+  // 稼働状況だけ：右端に「保存」列を追加
+  const viewHeaders = isKado ? [...headers, '保存'] : headers;
+
+  box.innerHTML = `
+    <table>
+      <thead>
+        <tr>${viewHeaders.map(h=>`<th>${escapeHtml_(h)}</th>`).join('')}</tr>
+      </thead>
+      <tbody>
+        ${rowsObj.map(obj=>{
+          const r = obj.r;
+          const row = obj.v || [];
+
+          // レベルselect
+          const levelVal = (iLevel >= 0) ? String(row[iLevel] ?? '').trim() : '';
+          const levelSel = `
+            <select class="op-select" data-col="level">
+              ${LEVEL_OPTIONS.map(opt=>{
+                const sel = (opt === levelVal) ? 'selected' : '';
+                return `<option value="${escapeHtml_(opt)}" ${sel}>${escapeHtml_(opt)}</option>`;
+              }).join('')}
+              ${LEVEL_OPTIONS.includes(levelVal) ? '' : `<option value="${escapeHtml_(levelVal)}" selected>${escapeHtml_(levelVal)}</option>`}
+            </select>
+          `;
+
+          // 稼働状況textarea
+          const statVal = (iStat >= 0) ? String(row[iStat] ?? '') : '';
+          const statCell = `
+            <div class="op-view" data-view="status">${escapeHtml_(statVal)}</div>
+            <textarea class="op-textarea" data-col="status" rows="2">${escapeHtml_(statVal)}</textarea>
+          `;
+          const statArea = `<textarea class="op-textarea" data-col="status" rows="2">${escapeHtml_(statVal)}</textarea>`;
+
+          // 行のHTML
+          const cellsHtml = row.map((c, ci)=>{
+            const s = String(c ?? '');
+            if(isKado && ci === iLevel) return `<td>${levelSel}</td>`;
+            if(isKado && ci === iStat) return `<td>${statCell}</td>`;
+            return `<td>${escapeHtml_(s)}</td>`;
+          }).join('');
+
+          const saveBtn = isKado
+            ? `<td><button class="op-save" data-action="save">保存</button></td>`
+            : '';
+
+          return `<tr data-row="${r}">${cellsHtml}${saveBtn}</tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  // 稼働状況のみ：保存ボタン処理（イベントは box に委譲）
+  if(isKado){
+    applyEditMode_(); 
+    box.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-action="save"]');
+      if(!btn) return;
+
+      const tr = btn.closest('tr[data-row]');
+      if(!tr) return;
+
+      const rowNum = Number(tr.dataset.row);
+      const level  = tr.querySelector('[data-col="level"]')?.value ?? '';
+      const status = tr.querySelector('[data-col="status"]')?.value ?? '';
+
+      // UI: 保存中
+      btn.disabled = true;
+      tr.classList.add('is-saving');
+      toast_('warn', '保存中', `行 ${rowNum}`);
+
+      try{
+        const save = await gsRun_('api_updateKado', { row: rowNum, level, status });
+        if(!save?.ok) throw new Error(save?.error || 'unknown');
+
+        // 更新日セルの表示更新
+        if(iUpd >= 0){
+          const tds = tr.querySelectorAll('td');
+          // 注意：稼働状況の時は末尾に保存列が増えるが、更新日は元のindexのまま
+          if(tds[iUpd]) tds[iUpd].textContent = save.updatedAt;
+        }
+
+        toast_('ok', '保存完了', `${save.category || ''} / ${save.updatedAt}`);
+
+        // view表示も更新
+        const v = tr.querySelector('.op-view[data-view="status"]');
+        if(v) v.textContent = status;
+      }catch(err){
+        toast_('ng', '保存失敗', err?.message || String(err));
+        alert('保存失敗: ' + (err?.message || err));
+      }finally{
+        tr.classList.remove('is-saving');
+        btn.disabled = false;
+      }
+    }, { passive:true });
+  }
+}
+
+function buildMlCols_(headers, sheetName){
+  // 稼働状況シートは「稼働状況」ヘッダーの列だけ改行
+  if(sheetName === '稼働状況'){
+    return headers
+      .map((h,i)=>({h:String(h||'').trim(), i}))
+      .filter(x => x.h.includes('稼働状況'))  // ★条件（完全一致なら === に）
+      .map(x => x.i);
+  }
+  return [];
+}
+
+function initOpEditToggle_(){
+  const btn = document.getElementById('btnOpEdit');
+  if(!btn) return;
+
+  // 既にイベントが付いてるなら二重登録しない
+  if(btn.dataset.bound === '1') return;
+  btn.dataset.bound = '1';
+
+  btn.addEventListener('click', ()=>{
+    window.OperationState.edit = !window.OperationState.edit;
+
+    btn.classList.toggle('is-on', window.OperationState.edit);
+    btn.textContent = window.OperationState.edit ? '編集ON' : '編集';
+
+    applyEditMode_();
+  });
+}
+
+function applyEditMode_(){
+  const root = document.getElementById('op-main');
+  if(!root) return;
+
+  const on = !!window.OperationState.edit;
+
+  // レベル
+  root.querySelectorAll('.op-select').forEach(el=>{
+    el.disabled = !on;
+  });
+
+  // 稼働状況：viewとtextareaを切替
+  root.querySelectorAll('.op-textarea[data-col="status"]').forEach(el=>{
+    el.disabled = !on;
+    el.style.display = on ? '' : 'none';
+  });
+  root.querySelectorAll('.op-view[data-view="status"]').forEach(el=>{
+    el.style.display = on ? 'none' : '';
+  });
+
+  // 保存ボタン
+  root.querySelectorAll('.op-save').forEach(btn=>{
+    btn.disabled = !on;
+  });
+}
+
+</script>

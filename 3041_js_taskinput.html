@@ -1,0 +1,36 @@
+<script>
+function openTaskModal(){
+
+  const modal = document.getElementById("taskModal");
+
+  modal.setAttribute("aria-hidden","false");
+  modal.classList.add("open");
+
+}
+
+function closeTaskModal(){
+
+  const modal = document.getElementById("taskModal");
+
+  modal.setAttribute("aria-hidden","true");
+  modal.classList.remove("open");
+
+}
+
+function saveTask(){
+
+  const data = {
+    task:document.getElementById("taskName").value,
+    link:document.getElementById("taskLink").value,
+    date:document.getElementById("taskDate").value
+  };
+
+  google.script.run.withSuccessHandler(()=>{
+
+    closeTaskModal();
+    loadTasks();
+
+  }).api_addTask(data);
+
+}
+</script>

@@ -1,0 +1,48 @@
+<style>
+  /* ===== Sidebar ===== */
+  aside.sidebar{
+    width: 230px;
+    background: linear-gradient(180deg, var(--nav), var(--nav2));
+    color: #fff;
+    border-right: 1px solid var(--nav-line);
+    transition: width .18s ease, padding .18s ease;
+    overflow:hidden;
+  }
+  aside.sidebar.hidden{width: 0; padding: 0; border-right: none; }
+  .sb-head{ padding: 12px 12px 10px; border-bottom: 1px solid var(--nav-line); }
+  .sb-title{ font-size: 16px; font-weight: 700; letter-spacing:.02em; }
+  .sb-sub{ font-size: 11px; color: var(--nav-sub); margin-top: 4px; }
+  .sb-menu{ padding: 10px; display:flex; flex-direction:column; gap:6px; }
+
+  .nav-btn{
+    width: 100%;
+    text-align:left;
+    padding: 10px 10px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: rgba(255,255,255,.06);
+    color: var(--nav-text);
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .12s ease, box-shadow .12s ease;
+    font-size: 13px;
+  }
+
+  /* ===== Sidebar Section Header（非クリック項目） ===== */
+  .sb-section{
+    margin-top: 10px;
+    padding: 8px 10px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--nav-sub);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: default;
+    user-select: none;
+  }
+  .act{ display:flex; gap:6px; align-items:center; }
+  .mini{ padding:6px 10px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; font-size:12px;}
+  .mini.primary{ border-color:var(--pri); color:var(--pri); background: var(--pri-soft); font-weight:700;}
+
+  /* Sidebar toggle button */
+  .toggle{ padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:#fff; cursor:pointer; }
+</style>

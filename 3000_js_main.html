@@ -1,0 +1,256 @@
+<script>
+/** ===== AppState: 1個だけに統一 ===== */
+window.AppState = window.AppState || {
+  type: 'SV',
+  headers: [],
+  rows: [],
+  headerIndex: {},
+  keyHeader: '見積番号',
+  customerHeader: '顧客名',
+  statusHeader: 'ステータス',
+  page: 1,
+  pageSize: 50,
+  loingUser:null,
+  total: 0,
+  plan: {
+    month: '',
+    columns: [],
+    groups: [],
+    rows: [],
+    rowIndexMap: [],
+    changes: new Map(),  // key `${r}:${c}` -> {r,c,v}
+    editing: null,
+  },  
+  task: {
+  memberMode: 'all', // all | me
+  members: [],
+  loginUser: ''
+},
+};
+
+const DEFAULT_PANEL = 'panel-link';
+const LS_KEY_PANEL  = 'activePanel';
+const LS_KEY_TYPE   = 'activeType';
+
+function setErr(msg){
+  const el = document.getElementById('err');
+  if (el) el.textContent = msg || '';
+}
+
+function setMeta(msg){
+  const el = document.getElementById('meta');
+  if (el) el.textContent = msg || '';
+}
+
+function getPanelFromHash(){
+  const h = (location.hash || '').replace(/^#/, '');
+  if (!h) return '';
+  try { return decodeURIComponent(h); } catch(e) { return h; }
+}
+
+function resolveInitialPanel(){
+  return getPanelFromHash()
+      || localStorage.getItem(LS_KEY_PANEL)
+      || DEFAULT_PANEL;
+}
+
+function setActivePanel(panelId, opts={pushHash:true}){
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(panelId)?.classList.add('active');
+
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+
+  let targetBtn = null;
+  if (panelId === 'panel-list') {
+    const type = localStorage.getItem(LS_KEY_TYPE) || window.AppState.type || 'SV';
+    targetBtn =
+      document.querySelector(`.nav-btn[data-panel="panel-list"][data-type="${type}"]`)
+      || document.querySelector(`.nav-btn[data-panel="panel-list"][data-type="SV"]`);
+  } else {
+    targetBtn = document.querySelector(`.nav-btn[data-panel="${panelId}"]`);
+  }
+  targetBtn?.classList.add('active');
+
+  localStorage.setItem(LS_KEY_PANEL, panelId);
+  if (opts.pushHash) history.replaceState(null,'','#'+panelId);
+}
+
+/** ===== Sidebar: 表示/非表示 ===== */
+function toggleSidebar(){
+  document.getElementById('sidebar').classList.toggle('hidden');
+}
+
+/** ===== サイドバー onclick="navTo(this)" 用 ===== */
+async function navTo(btn){
+  if (!btn) return;
+
+  const url = btn.getAttribute('data-url');
+  if (url) { window.open(url, '_blank'); return; }
+
+  const panelId  = btn.dataset.panel || DEFAULT_PANEL;
+  const nextType = btn.dataset.type  || '';
+  const action   = btn.dataset.action|| '';
+
+  if (nextType) localStorage.setItem(LS_KEY_TYPE, nextType);
+
+  setActivePanel(panelId, {pushHash:true});
+
+  if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();
+
+  if (action && typeof window[action] === 'function') {
+    await window[action]();
+  } else {
+    setErr(''); setMeta('');
+  }
+
+  if (panelId === 'panel-list') {
+    const st = window.AppState;
+    st.type = nextType || localStorage.getItem(LS_KEY_TYPE) || 'SV';
+    await initMemberSelect_();
+    await loadCases_();
+    return;
+  }
+
+  if (panelId === 'panel-rule') {
+    await reload();
+    return;
+  }
+
+  if (panelId === 'panel-task') {
+    await loadTask();
+    return;
+  }
+
+  if (panelId === 'panel-plan') {
+    await loadPlan_();
+    return;
+  }
+
+  if (panelId === 'panel-info') {
+    await initInfoHub();
+    return;
+  }
+  if (panelId === 'panel-operation') {
+    await loadOperationDashboard();
+    return;
+  }
+}
+
+/** ===== 初回 & hash追従 ===== */
+window.addEventListener('DOMContentLoaded', async () => {
+  const panelId = resolveInitialPanel();
+  setActivePanel(panelId, {pushHash:true});
+  
+  if (panelId === 'panel-list') {
+    const st = window.AppState;
+    st.type = localStorage.getItem(LS_KEY_TYPE) || st.type || 'SV';
+    await initMemberSelect_();
+    await loadCases_();
+  }
+
+  if (panelId === 'panel-rule') {
+    await reload();
+  }
+
+  if (panelId === 'panel-task') {
+    await loadTask();
+  }
+  if (panelId === 'panel-plan') {
+    await loadPlan_();
+  }
+
+  if (panelId === 'panel-info') {
+    await initInfoHub();
+  }
+  if (panelId === 'panel-operation') {
+    await loadOperationDashboard();
+  }
+
+  if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();
+
+});
+
+window.addEventListener('hashchange', async () => {
+  const panelId = getPanelFromHash() || DEFAULT_PANEL;
+  setActivePanel(panelId, {pushHash:false});
+
+  if (panelId === 'panel-list') {
+    const st = window.AppState;
+    st.type = localStorage.getItem(LS_KEY_TYPE) || st.type || 'SV';
+    await initMemberSelect_();
+    await loadCases_();
+    return;
+  }
+
+  if (panelId === 'panel-rule') {
+    await reload();
+    return;
+  }
+
+  if (panelId === 'panel-task') {
+    await loadTask();
+    return;
+  }
+
+  if (panelId === 'panel-plan') {
+    await loadPlan_();
+    return;
+  }
+
+  if (panelId === 'panel-info') {
+    await initInfoHub();
+    return;
+  }
+  if (panelId === 'panel-operation') {
+    await loadOperationDashboard();
+    return;
+  }
+  if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();
+});
+
+/** ===== ログインユーザー取得関数 ===== */
+function fetchLoginUser_(){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(res => {
+        if(!res?.ok){
+          reject(res?.error || 'login user api error');
+          return;
+        }
+
+        window.AppState.loginUser = {
+          email: res.email,
+          name: res.name
+        };
+
+        resolve(res);
+      })
+      .withFailureHandler(err => reject(err))
+      .api_getLoginUser();
+  });
+}
+
+async function initApp_(){
+
+  try{
+    await fetchLoginUser_();
+    console.log('login user', AppState.loginUser);
+
+  }catch(err){
+    console.warn('login user取得失敗', err);
+  }
+
+  loadCases_();
+}
+
+function renderLoginUser_(){
+  const el = document.getElementById('loginUser');
+  if(!el) return;
+
+  const u = AppState.loginUser;
+  if(!u) return;
+
+  el.textContent = `ログイン：${u.name}`;
+}
+
+</script>

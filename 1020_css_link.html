@@ -1,0 +1,99 @@
+<style>
+/* ===== link tiles (独自) ===== */
+.portal .portal-cat{ margin: 8px 0 18px; }
+
+.portal .portal-catHead{
+  display:flex; align-items:center; gap:10px;
+  padding: 6px 2px 10px;
+}
+
+.portal .portal-toggle{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:10px;
+  height:30px;
+  padding:0 10px;
+  cursor:pointer;
+  font-size:12px;
+}
+
+.portal .portal-catTitle{ font-weight:900; font-size:16px; }
+.portal .portal-catMeta{ margin-left:auto; font-size:16px; color:var(--sub); }
+
+.portal .portal-tiles{
+  display:flex;
+  flex-wrap:wrap;
+  gap:16px 18px;
+  align-items:flex-start;
+}
+
+.portal .portal-link{
+  width: 120px;
+  height: 120px;
+  background: var(--card);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:14px 12px 12px;
+  text-decoration:none !important;
+  color:inherit !important;
+  display:flex !important;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  position:relative;
+}
+
+.portal .portal-link:hover{
+  box-shadow:0 6px 18px rgba(0,0,0,.10);
+  transform: translateY(-1px);
+}
+
+.portal .portal-linkIcon{
+  width:50px !important;
+  height:86px !important;
+  max-width:86px !important;
+  max-height:86px !important;
+  border-radius:16px;
+  background:#fff;
+  object-fit:contain !important;
+  display:block !important;
+}
+
+.portal .portal-linkName{
+  font-size:11px;
+  font-weight:800;
+  text-align:center;
+  line-height:1.2;
+  min-height: 34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#111827;
+}
+
+/* ？ */
+.portal .portal-linkHelp{
+  position:absolute;
+  bottom:10px;
+  font-weight:900;
+  color:#e11d48;
+  cursor:pointer;
+  user-select:none;
+}
+
+/* 共有CSSの a / img の影響を抑える */
+.portal .portal-link img{ width:86px !important; height:86px !important; }
+
+/* 折り畳み */
+.portal .portal-hidden{ display:none !important; }
+
+/* empty */
+.portal .portal-empty{
+  margin-top:16px;
+  color:var(--sub);
+  padding:14px;
+  border:1px dashed var(--line);
+  border-radius:14px;
+  background:rgba(255,255,255,.5);
+}
+</style>
