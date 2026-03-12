@@ -6,29 +6,31 @@
 
   <div class="sb-menu">
     <!-- ===== ホーム ===== -->
-    <div class="sb-section">ホーム</div>
-    <button type="button" class="nav-btn" data-panel="panel-info" onclick="navTo(this)">Info(作成中)</button>
-    <button type="button" class="nav-btn" data-panel="panel-link" onclick="navTo(this)">リンク集</button>
-    <button type="button" class="nav-btn" data-panel="panel-task" onclick="navTo(this)">タスク管理(作成中)</button>
+    <div class="sb-section">🏠HOME</div>
+    <button type="button" class="nav-btn" data-panel="panel-dashboard" onclick="navTo(this)">ダッシュボード</button>
+    <button type="button" class="nav-btn" data-panel="panel-info" onclick="navTo(this)">Information</button>
 
     <!-- ===== 案件管理 ===== -->
-    <div class="sb-section">案件管理</div>
+    <div class="sb-section">📋PROJECT</div>
     <button type="button" class="nav-btn" data-panel="panel-list" data-type="SV" onclick="navTo(this)">SV案件管理表</button>
     <button type="button" class="nav-btn" data-panel="panel-list" data-type="CL" onclick="navTo(this)">CL案件管理表</button>
+    <button type="button" class="nav-btn" data-panel="panel-wbs" onclick="navTo(this)">案件スケジュール</button>
+
+    <!-- ===== タスク/稼働 ===== -->
+    <div class="sb-section">📆TASKS &amp; WORKLOAD</div>
+    <button type="button" class="nav-btn" data-panel="panel-task" onclick="navTo(this)">社内タスク</button>
+    <button type="button" class="nav-btn" data-panel="panel-plan" onclick="navTo(this)">予定管理表</button>
     <button type="button" class="nav-btn" data-panel="panel-operation" onclick="navTo(this)">稼働状況</button>
 
-    <!-- ===== スケジュール===== -->
-    <div class="sb-section">スケジュール</div>
-    <button type="button" class="nav-btn" data-panel="panel-plan" data-action="plan" onclick="navTo(this)">予定管理表</button>
-    <button type="button" class="nav-btn" data-panel="panel-schedule" data-action="loadSchedule" onclick="navTo(this)">案件スケジュール(作成中)</button>
-
-    <!-- ===== リンク ===== -->
-    <div class="sb-section">リンク</div>
+    <!-- ===== Knowledge ===== -->
+    <div class="sb-section">📔KNOWLEDGE</div>
+    <button type="button" class="nav-btn" data-panel="panel-link" onclick="navTo(this)">リンク一覧</button>
+    <button type="button" class="nav-btn" data-panel="panel-manual" onclick="navTo(this)">マニュアル</button>
+    <button type="button" class="nav-btn" data-panel="panel-dictionary" onclick="navTo(this)">案件ディクショナリ</button>
     <button type="button" class="nav-btn" data-panel="panel-rule" onclick="navTo(this)">基盤ルール</button>
-    <button type="button" class="nav-btn" data-panel="panel-syutyo" onclick="navTo(this)">マニュアル(作成中)</button>
-    
+
     <!-- ===== その他 ===== -->
-    <div class="sb-section">その他</div>
-    <button type="button" class="nav-btn" data-panel="panel-setting" onclick="navTo(this)">設定（ダミー）</button>
+    <div class="sb-section">⚙️SYSTEM</div>
+    <button type="button" class="nav-btn" data-panel="panel-setting" onclick="navTo(this)">設定</button>
   </div>
 </aside>

@@ -1,0 +1,30 @@
+<section id="panel-wbs" class="panel">
+  <div class="wbs-toolbar">
+    <div class="wbs-toolbar-left">
+      <div class="wbs-tabs">
+        <button type="button" id="wbsTabSV" class="wbs-tab active" onclick="switchWbsType('SV')">SV</button>
+        <button type="button" id="wbsTabCL" class="wbs-tab" onclick="switchWbsType('CL')">CL</button>
+      </div>
+
+      <div class="wbs-filter">
+        <label class="small" for="wbsStartDate">開始日</label>
+        <input type="date" id="wbsStartDate" onchange="applyWbsFiltersAndRender()">
+      </div>
+
+      <div class="wbs-filter">
+        <label class="small" for="wbsMemberFilter">担当者</label>
+        <select id="wbsMemberFilter" onchange="applyWbsFiltersAndRender()">
+          <option value="">全員</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="wbs-toolbar-right">
+      <button type="button" class="btn" onclick="loadCaseWbs()">再読込</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="caseWbsRoot" class="wbs-root">未読込</div>
+  </div>
+</section>

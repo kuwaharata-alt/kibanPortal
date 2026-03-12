@@ -1,14 +1,8 @@
 <style>
-.task-login-user{
-  margin:8px 0 10px;
-  font-size:12px;
-  color:#475569;
-}
-
 .task-table-shell{
   width:100%;
   height:calc(100vh - 260px);
-  min-height:320px;
+  min-height:240px;
   max-height:calc(100vh - 260px);
   border:1px solid #cfd8e3;
   background:#fff;
@@ -284,29 +278,6 @@
   margin:0;
 }
 
-.task-progress{
-  width:100%;
-  min-width:130px;
-  height:14px;
-  border-radius:999px;
-  background:#e5e7eb;
-  overflow:hidden;
-  position:relative;
-  display:block;
-}
-
-.task-progress-bar{
-  display:block;
-  height:100%;
-  border-radius:999px;
-  transition:width .2s ease;
-}
-
-.task-table td:nth-child(4){
-  padding-top:4px;
-  padding-bottom:4px;
-}
-
 .task-status-name{
   color:#1e293b;
 }
@@ -315,16 +286,38 @@
   color:#64748b;
 }
 
+.task-progress{
+  width:100%;
+  min-width:130px;
+  height:16px;
+  border-radius:999px;
+  background:#d1d5db;
+  overflow:hidden;
+  position:relative;
+}
+
+.task-progress-bar{
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  width:0;
+  border-radius:999px;
+  transition:width .2s ease;
+  z-index:1;
+}
+
 /* 状態別色 */
 .task-status-wrap.is-notstarted .task-progress-bar{
-  background:#94a3b8;
+  background:#94a3b8 !important;
 }
 
 .task-status-wrap.is-working .task-progress-bar{
-  background:#3b82f6;
+  background:#2563eb !important;
 }
 
 .task-status-wrap.is-done .task-progress-bar{
-  background:#22c55e;
+  background:#16a34a !important;
 }
+
 </style>

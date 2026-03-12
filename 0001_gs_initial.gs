@@ -14,6 +14,7 @@ function getSS_(key) {
     Task: '1e9MU0a0S8B-C_VIl7pUUMayU429gN1wwkWApGcSQ5vw', // タスク
     Plan: '1Rh9lQrLyre4IcQkPx_4cD_0j_ibwR4LWFL7jHExKL_k', // 予定
     Operation: '1zYeUZvWs2vPoLvksmjUHx06AZMZaSTe05ZJw5jPfLno', // 稼働状況
+    Manual: '1uGB_vvDl0yBj8wo0r5koxvKQxwowgvJdbumCoY5JBGM', //マニュアル
   };
 
   const id = map[k];

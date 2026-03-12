@@ -1,9 +1,31 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-  </head>
-  <body>
-    
-  </body>
-</html>
+<section id="panel-manual" class="panel">
+  <div class="card manual-card">
+    <div class="manual-head">
+      <div>
+        <h2 class="manual-title">マニュアル一覧</h2>
+        <div id="manualMeta" class="manual-meta">読込中...</div>
+      </div>
+    </div>
+
+    <div id="manualErr" class="manual-err"></div>
+    <div id="manualGrid" class="manual-grid"></div>
+  </div>
+</section>
+
+<div id="manualModal" class="manual-modal" aria-hidden="true">
+  <div class="manual-modal-bg" onclick="closeManualModal()"></div>
+
+  <div class="manual-modal-box">
+    <div class="manual-modal-head">
+      <div id="manualModalTitle" class="manual-modal-title">マニュアル</div>
+      <div class="manual-modal-actions">
+        <a id="manualModalLink" class="manual-modal-link" href="#" target="_blank" rel="noopener noreferrer">別タブで開く</a>
+        <button type="button" class="manual-modal-close" onclick="closeManualModal()">×</button>
+      </div>
+    </div>
+
+    <div class="manual-modal-body">
+      <iframe id="manualFrame" src="" allowfullscreen></iframe>
+    </div>
+  </div>
+</div>

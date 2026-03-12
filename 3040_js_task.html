@@ -68,20 +68,18 @@ function formatTaskDueInfo_(dateStr){
 }
 
 function renderTaskStatusBar_(status, progress, doneCount, targetCount){
-
   const p = Math.max(0, Math.min(100, Math.round((progress || 0) * 100)));
 
-  let cls = "is-notstarted";
-  if(status === "完了") cls = "is-done";
-  else if(status === "対応中") cls = "is-working";
+  let cls = 'is-notstarted';
+  if (status === '完了') cls = 'is-done';
+  else if (status === '対応中') cls = 'is-working';
 
   return `
     <div class="task-status-wrap ${cls}">
       <div class="task-status-head">
         <span class="task-status-name">${escapeHtml_(status)}</span>
-        <span class="task-status-count">(${doneCount}/${targetCount})</span>
+        <span class="task-status-count">(${doneCount}/${targetCount})　</span>
       </div>
-
       <div class="task-progress">
         <div class="task-progress-bar" style="width:${p}%"></div>
       </div>
@@ -89,56 +87,6 @@ function renderTaskStatusBar_(status, progress, doneCount, targetCount){
   `;
 }
 
-function openTaskModal(){
-  const modal = document.getElementById('taskModal');
-  if (!modal) return;
-  modal.setAttribute('aria-hidden', 'false');
-  modal.classList.add('open');
-}
-
-function closeTaskModal(){
-  const modal = document.getElementById('taskModal');
-  if (!modal) return;
-  modal.setAttribute('aria-hidden', 'true');
-  modal.classList.remove('open');
-}
-
-function saveTask(){
-  const data = {
-    task: document.getElementById('taskName')?.value?.trim() || '',
-    link: document.getElementById('taskLink')?.value?.trim() || '',
-    date: document.getElementById('taskDate')?.value || ''
-  };
-
-  if (!data.task) {
-    alert('タスクを入力してください');
-    return;
-  }
-
-  google.script.run
-    .withSuccessHandler(function(res){
-      if (!res || !res.ok) {
-        alert(res?.error || '登録に失敗しました');
-        return;
-      }
-
-      const nameEl = document.getElementById('taskName');
-      const linkEl = document.getElementById('taskLink');
-      const dateEl = document.getElementById('taskDate');
-
-      if (nameEl) nameEl.value = '';
-      if (linkEl) linkEl.value = '';
-      if (dateEl) dateEl.value = '';
-
-      closeTaskModal();
-      loadTask();
-    })
-    .withFailureHandler(function(err){
-      console.error('api_addTask error', err);
-      alert('登録に失敗しました');
-    })
-    .api_addTask(data);
-}
 
 function loadTask(){
   return new Promise(function(resolve, reject){
@@ -220,7 +168,6 @@ function loadTask(){
         }
 
         el.innerHTML = `
-          <div class="task-login-user">ログイン: ${escapeHtml_(loginUser || '-')}</div>
           <div class="task-table-shell">
             <div class="task-table-wrap">
               <table class="task-table">

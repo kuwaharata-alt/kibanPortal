@@ -1,9 +1,128 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-  </head>
-  <body>
-    
-  </body>
-</html>
+<script>
+window.ManualState = {
+  items: [],
+};
+
+function escHtmlManual_(s){
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function setManualMeta_(msg){
+  const el = document.getElementById('manualMeta');
+  if (el) el.textContent = String(msg ?? '');
+}
+
+function setManualErr_(msg){
+  const el = document.getElementById('manualErr');
+  if (el) el.textContent = String(msg ?? '');
+}
+
+function loadManualList(){
+  setManualMeta_('読込中...');
+  setManualErr_('');
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (!res || !res.ok) {
+        setManualMeta_('');
+        setManualErr_(res && res.error ? res.error : 'マニュアル一覧の取得に失敗しました');
+        renderManualGrid_([]);
+        return;
+      }
+
+      const items = Array.isArray(res.items) ? res.items : [];
+      window.ManualState.items = items;
+      renderManualGrid_(items);
+      setManualMeta_(items.length + '件');
+    })
+    .withFailureHandler(function(err){
+      setManualMeta_('');
+      setManualErr_(err && err.message ? err.message : String(err));
+      renderManualGrid_([]);
+    })
+    .api_getManualList();
+}
+
+function renderManualGrid_(items){
+  const el = document.getElementById('manualGrid');
+  if (!el) return;
+
+  if (!items.length) {
+    el.innerHTML = '<div class="small" style="color:#64748b;">表示できるマニュアルがありません</div>';
+    return;
+  }
+
+  el.innerHTML = items.map(function(item){
+    return `
+      <article class="manual-item">
+        <button type="button" class="manual-thumb-btn" onclick="openManualModalById('${escHtmlManual_(item.id)}')">
+          <iframe class="manual-thumb" src="${escHtmlManual_(item.previewUrl)}" loading="lazy" tabindex="-1" allowfullscreen></iframe>
+        </button>
+
+        <div class="manual-item-body">
+          <div class="manual-item-title">${escHtmlManual_(item.title)}</div>
+          <div class="manual-item-category">${escHtmlManual_(item.category || '')}</div>
+          <div class="manual-item-actions">
+            <a class="manual-link" href="${escHtmlManual_(item.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();">
+              開く
+            </a>
+          </div>
+        </div>
+      </article>
+    `;
+  }).join('');
+}
+
+function openManualModalById(id){
+  const item = (window.ManualState.items || []).find(function(x){
+    return String(x.id) === String(id);
+  });
+  if (!item) return;
+
+  openManualModal(item);
+}
+
+function openManualModal(item){
+  const modal = document.getElementById('manualModal');
+  const title = document.getElementById('manualModalTitle');
+  const frame = document.getElementById('manualFrame');
+  const link = document.getElementById('manualModalLink');
+
+  if (title) title.textContent = item.title || 'マニュアル';
+  if (frame) frame.src = item.embedUrl || item.previewUrl || item.url || '';
+  if (link) link.href = item.url || '#';
+
+  if (modal) {
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  document.body.style.overflow = 'hidden';
+}
+
+function closeManualModal(){
+  const modal = document.getElementById('manualModal');
+  const frame = document.getElementById('manualFrame');
+
+  if (modal) {
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  if (frame) frame.src = '';
+  document.body.style.overflow = '';
+}
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closeManualModal();
+});
+
+document.addEventListener('DOMContentLoaded', function(){
+  loadManualList();
+});
+</script>

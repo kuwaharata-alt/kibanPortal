@@ -197,7 +197,7 @@ function isValidMemberText_(v) {
 function buildWorkPeriodHtmlFast_(caseRow, idxMap, statusRow, statusHeaderMap, type) {
   const caseStatus = getByIndex_(caseRow, idxMap['ステータス']);
 
-  const caseBig = '案件確認';
+  const caseBig = '案件管理';
   const inBig = '社内作業';
   const outBig = (String(type || '').toUpperCase() === 'CL') ? '現地作業' : '現地・リモート作業';
 

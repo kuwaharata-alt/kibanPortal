@@ -134,6 +134,10 @@ async function navTo(btn){
     await loadOperationDashboard();
     return;
   }
+  if (panelId === 'panel-wbs') {
+    await loadCaseWbs();
+    return;
+  }
 }
 
 /** ===== 初回 & hash追従 ===== */
@@ -165,7 +169,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   if (panelId === 'panel-operation') {
     await loadOperationDashboard();
   }
-
+  if (panelId === 'panel-wbs') {
+    await loadCaseWbs();
+    return;
+  }
   if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();
 
 });
@@ -203,6 +210,10 @@ window.addEventListener('hashchange', async () => {
   }
   if (panelId === 'panel-operation') {
     await loadOperationDashboard();
+    return;
+  }
+  if (panelId === 'panel-wbs') {
+    await loadCaseWbs();
     return;
   }
   if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();

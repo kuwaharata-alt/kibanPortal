@@ -1,0 +1,425 @@
+<script>
+window.CaseWbsState = {
+  type: 'SV',
+  rawRows: [],
+  startDate: '',
+  months: 1.5
+};
+
+function switchWbsType(type){
+  type = String(type || 'SV').trim().toUpperCase();
+  if (type !== 'CL') type = 'SV';
+
+  window.CaseWbsState.type = type;
+
+  const svBtn = document.getElementById('wbsTabSV');
+  const clBtn = document.getElementById('wbsTabCL');
+  if (svBtn) svBtn.classList.toggle('active', type === 'SV');
+  if (clBtn) clBtn.classList.toggle('active', type === 'CL');
+
+  loadCaseWbs();
+}
+
+function loadCaseWbs(){
+  const root = document.getElementById('caseWbsRoot');
+  if (!root) return;
+
+  const type = window.CaseWbsState.type || 'SV';
+  root.innerHTML = `<div class="wbs-empty">読込中... (${escapeHtml_(type)})</div>`;
+
+  google.script.run
+    .withSuccessHandler(function(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      window.CaseWbsState.rawRows = list;
+      initWbsStartDateIfNeeded_(list);
+      populateWbsMemberFilter_(list);
+      applyWbsFiltersAndRender();
+    })
+    .withFailureHandler(function(err){
+      const msg = err && err.message ? err.message : String(err || '読込エラー');
+      root.innerHTML = `<div class="wbs-empty" style="color:#dc2626;">${escapeHtml_(msg)}</div>`;
+    })
+    .api_getCaseWbsData(type);
+}
+
+function initWbsStartDateIfNeeded_(rows){
+  const input = document.getElementById('wbsStartDate');
+  if (!input) return;
+
+  if (input.value) {
+    window.CaseWbsState.startDate = input.value;
+    return;
+  }
+
+  const start = getDefaultStartDate_(rows);
+  input.value = start;
+  window.CaseWbsState.startDate = start;
+}
+
+function populateWbsMemberFilter_(rows){
+  const sel = document.getElementById('wbsMemberFilter');
+  if (!sel) return;
+
+  const current = sel.value || '';
+  const names = new Set();
+
+  (rows || []).forEach(function(r){
+    splitMemberNames_(r.manager).forEach(function(n){ names.add(n); });
+    splitMemberNames_(r.support).forEach(function(n){ names.add(n); });
+    splitMemberNames_(r.primary).forEach(function(n){ names.add(n); });
+  });
+
+  const list = Array.from(names).filter(Boolean).sort(function(a, b){
+    return a.localeCompare(b, 'ja');
+  });
+
+  sel.innerHTML = '<option value="">全員</option>' + list.map(function(n){
+    return `<option value="${escapeHtml_(n)}">${escapeHtml_(n)}</option>`;
+  }).join('');
+
+  if (current && list.includes(current)) sel.value = current;
+}
+
+function applyWbsFiltersAndRender(){
+  const input = document.getElementById('wbsStartDate');
+  const memberEl = document.getElementById('wbsMemberFilter');
+
+  const startDate = input && input.value ? input.value : getTodayYmd_();
+  const memberFilter = memberEl ? String(memberEl.value || '').trim() : '';
+
+  window.CaseWbsState.startDate = startDate;
+
+  let rows = (window.CaseWbsState.rawRows || []).map(function(r){
+    const st = parseStatusText_(r.statusText || '');
+    return Object.assign({}, r, {
+      statusCase: st.caseStatus,
+      statusIn: st.inStatus,
+      statusOut: st.outStatus
+    });
+  });
+
+  if (memberFilter) {
+    rows = rows.filter(function(r){ return hasMember_(r, memberFilter); });
+  }
+
+  rows = sortWbsRows_(rows);
+  renderCaseWbs(rows, startDate, window.CaseWbsState.months || 1.5);
+}
+
+function renderCaseWbs(rows, startDate, months){
+  const root = document.getElementById('caseWbsRoot');
+  if (!root) return;
+
+  if (!rows.length) {
+    root.innerHTML = '<div class="wbs-empty">対象案件はありません。</div>';
+    return;
+  }
+
+  const dates = buildFixedRangeDates_(startDate, months || 1.5);
+  const todayKey = getTodayYmd_();
+  const dayWidth = 26;
+  const ganttWidth = dates.length * dayWidth;
+
+  let html = '';
+  html += '<table class="wbs-table">';
+  html += '<thead><tr>';
+  html += '<th class="wbs-col-case wbs-sticky-1">案件情報</th>';
+  html += '<th class="wbs-col-member wbs-sticky-2">担当SE</th>';
+  html += '<th class="wbs-col-cat wbs-sticky-3">カテゴリ</th>';
+  html += '<th class="wbs-col-status wbs-sticky-4">ステータス</th>';
+  html += '<th class="wbs-col-period wbs-sticky-5">期間</th>';
+  html += `<th class="wbs-col-gantt" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">`;
+  html += renderWbsHeader_(dates, todayKey, ganttWidth);
+  html += '</th>';
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(function(r){
+    html += renderWbsRow_(r, dates, todayKey, ganttWidth, dayWidth);
+  });
+
+  html += '</tbody></table>';
+  root.innerHTML = html;
+}
+
+function renderWbsHeader_(dates, todayKey, ganttWidth){
+  return `
+    <div class="wbs-gantt-head" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">
+      <div class="wbs-gantt-head-grid">
+        ${dates.map(function(d){
+          return `<div class="wbs-gantt-head-day ${d.isWeekend ? 'weekend' : ''} ${d.key === todayKey ? 'today' : ''}">${d.m}/${d.d}</div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWbsRow_(r, dates, todayKey, ganttWidth, dayWidth){
+  return `
+    <tr>
+      <td class="wbs-casecell wbs-col-case wbs-sticky-1">
+        <div class="wbs-cellbox">
+          <div class="wbs-case-key">[${escapeHtml_(r.key || '')}]</div>
+          <div class="wbs-case-customer">${escapeHtml_(r.customer || '')}</div>
+        </div>
+      </td>
+
+      <td class="wbs-membercell wbs-col-member wbs-sticky-2">
+        <div class="wbs-cellbox">
+          <div class="wbs-member-line">管理者：${escapeHtml_(r.manager || 'ー')}</div>
+          <div class="wbs-member-line">サポート：${escapeHtml_(r.support || 'ー')}</div>
+        </div>
+      </td>
+
+      <td class="wbs-col-cat wbs-sticky-3">
+        <div class="wbs-stack">
+          ${renderWbsCategoryLane_('案件', 'case')}
+          ${renderWbsCategoryLane_('社内', 'in')}
+          ${renderWbsCategoryLane_('社外', 'out')}
+        </div>
+      </td>
+
+      <td class="wbs-col-status wbs-sticky-4">
+        <div class="wbs-stack">
+          ${renderWbsStatusLane_(r.statusCase)}
+          ${renderWbsStatusLane_(r.statusIn)}
+          ${renderWbsStatusLane_(r.statusOut)}
+        </div>
+      </td>
+
+      <td class="wbs-col-period wbs-sticky-5">
+        <div class="wbs-stack">
+          ${renderWbsPeriodLane_(r.caseStart, r.caseEnd)}
+          ${renderWbsPeriodLane_(r.inStart, r.inEnd)}
+          ${renderWbsPeriodLane_(r.outStart, r.outEnd)}
+        </div>
+      </td>
+
+      <td class="wbs-gantt-cell" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">
+        <div class="wbs-gantt-stack">
+          ${renderWbsGanttLane_(dates, r.caseStart, r.caseEnd, 'case', false, todayKey, dayWidth)}
+          ${renderWbsGanttLane_(dates, r.inStart, r.inEnd, 'in', false, todayKey, dayWidth)}
+          ${renderWbsGanttLane_(dates, r.outStart, r.outEnd, 'out', isOverDue_(r.caseEnd, todayKey, r.statusText), todayKey, dayWidth)}
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function renderWbsCategoryLane_(label, kind){
+  return `
+    <div class="wbs-stack-row">
+      <div class="wbs-cat-lane ${kind}">${escapeHtml_(label)}</div>
+    </div>
+  `;
+}
+
+function renderWbsStatusLane_(status){
+  return `
+    <div class="wbs-stack-row">
+      <div class="wbs-status-lane">
+        ${renderWbsChip_(status)}
+      </div>
+    </div>
+  `;
+}
+
+function renderWbsPeriodLane_(start, end){
+  return `
+    <div class="wbs-stack-row">
+      <div class="wbs-period-lane">
+        ${escapeHtml_(fmtPeriod_(start, end) || '－')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWbsGanttLane_(dates, start, end, type, isOver, todayKey, dayWidth){
+  const range = clipRangeToVisible_(dates, start, end);
+  const todayIdx = dates.findIndex(function(d){ return d.key === todayKey; });
+  const todayLeft = todayIdx >= 0 ? (todayIdx * dayWidth) + 'px' : '-9999px';
+
+  let barHtml = '';
+  if (range) {
+    const left = range.startIdx * dayWidth + 1;
+    const width = Math.max(((range.endIdx - range.startIdx + 1) * dayWidth) - 2, 12);
+    const label = width >= 60 ? fmtPeriod_(start, end) : '';
+
+    const cls = isOver
+      ? 'wbs-bar wbs-bar-over'
+      : type === 'case'
+        ? 'wbs-bar wbs-bar-case'
+        : type === 'in'
+          ? 'wbs-bar wbs-bar-in'
+          : 'wbs-bar wbs-bar-out';
+
+    barHtml = `<div class="${cls}" style="left:${left}px;width:${width}px;">${escapeHtml_(label)}</div>`;
+  }
+
+  return `
+    <div class="wbs-gantt-row" style="--today-left:${todayLeft};">
+      ${barHtml}
+    </div>
+  `;
+}
+
+function renderWbsChip_(status){
+  const s = String(status || '').replace(/\s+/g, '').trim();
+  if (!s) return '<span class="wbs-chip wbs-chip-empty">－</span>';
+  return `<span class="wbs-chip ${getWbsChipClass_(s)}">${escapeHtml_(s)}</span>`;
+}
+
+function getWbsChipClass_(s){
+  if (/未着手|未対応|未実施/.test(s)) return 'wbs-chip-mitei';
+  if (/対応中|進行中|作業中|確認中|事前確認中|アサイン中/.test(s)) return 'wbs-chip-tyu';
+  if (/完了|済/.test(s)) return 'wbs-chip-kanryo';
+  if (/クローズ|CLOSE/i.test(s)) return 'wbs-chip-close';
+  if (/保留|停止|延期/.test(s)) return 'wbs-chip-horyu';
+  return 'wbs-chip-michaku';
+}
+
+function parseStatusText_(text){
+  const result = { caseStatus:'', inStatus:'', outStatus:'' };
+  if (!text) return result;
+
+  String(text)
+    .replace(/\r/g, '')
+    .split('\n')
+    .map(function(v){ return v.trim(); })
+    .filter(Boolean)
+    .forEach(function(line){
+      if (line.indexOf('案件ST') === 0) result.caseStatus = cleanStatus_(splitByColon_(line));
+      else if (line.indexOf('社内') === 0) result.inStatus = cleanStatus_(splitByColon_(line));
+      else if (line.indexOf('現地') === 0 || line.indexOf('社外') === 0) result.outStatus = cleanStatus_(splitByColon_(line));
+    });
+
+  return result;
+}
+
+function splitByColon_(s){
+  const m = String(s || '').match(/^[^:：]+[:：](.*)$/);
+  return m ? m[1] : '';
+}
+
+function cleanStatus_(s){
+  if (!s) return '';
+  return String(s).replace(/\s+/g, '').replace(/Doc.*$/i, '').trim();
+}
+
+function splitMemberNames_(v){
+  return String(v || '')
+    .split(/[\/,，、\s]+/)
+    .map(function(s){ return s.trim(); })
+    .filter(Boolean)
+    .filter(function(s){ return s !== 'ー' && s !== '-'; });
+}
+
+function hasMember_(r, name){
+  const list = []
+    .concat(splitMemberNames_(r.manager))
+    .concat(splitMemberNames_(r.support))
+    .concat(splitMemberNames_(r.primary));
+  return list.includes(name);
+}
+
+function sortWbsRows_(rows){
+  return rows.slice().sort(function(a, b){
+    const ad = a.caseStart || a.inStart || a.outStart || '9999-12-31';
+    const bd = b.caseStart || b.inStart || b.outStart || '9999-12-31';
+    if (ad < bd) return -1;
+    if (ad > bd) return 1;
+    return String(a.key || '').localeCompare(String(b.key || ''), 'ja');
+  });
+}
+
+function buildFixedRangeDates_(startYmd, months){
+  const start = parseYmdToDate_(startYmd) || new Date();
+  const totalDays = Math.max(30, Math.round((months || 1.5) * 30));
+  const arr = [];
+  const d = new Date(start);
+
+  for (let i = 0; i < totalDays; i++) {
+    arr.push({
+      key: formatYmd_(d),
+      m: d.getMonth() + 1,
+      d: d.getDate(),
+      isWeekend: d.getDay() === 0 || d.getDay() === 6
+    });
+    d.setDate(d.getDate() + 1);
+  }
+  return arr;
+}
+
+function clipRangeToVisible_(dates, start, end){
+  if (!start || !end || !dates.length) return null;
+
+  const firstKey = dates[0].key;
+  const lastKey = dates[dates.length - 1].key;
+  if (end < firstKey || start > lastKey) return null;
+
+  const visibleStart = start < firstKey ? firstKey : start;
+  const visibleEnd = end > lastKey ? lastKey : end;
+
+  const startIdx = dates.findIndex(function(d){ return d.key === visibleStart; });
+  const endIdx = dates.findIndex(function(d){ return d.key === visibleEnd; });
+
+  if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) return null;
+  return { startIdx:startIdx, endIdx:endIdx };
+}
+
+function getDefaultStartDate_(rows){
+  let min = '';
+  (rows || []).forEach(function(r){
+    [r.caseStart, r.inStart, r.outStart].forEach(function(v){
+      if (!v) return;
+      if (!min || v < min) min = v;
+    });
+  });
+  return min || getTodayYmd_();
+}
+
+function isOverDue_(caseEnd, todayKey, statusText){
+  if (!caseEnd) return false;
+  if (/クローズ|CLOSE/i.test(String(statusText || ''))) return false;
+  return caseEnd < todayKey;
+}
+
+function fmtPeriod_(s, e){
+  if (!s && !e) return '';
+  if (s && !e) return fmtMd_(s);
+  if (!s && e) return fmtMd_(e);
+  if (s === e) return fmtMd_(s);
+  return `${fmtMd_(s)}〜${fmtMd_(e)}`;
+}
+
+function fmtMd_(ymd){
+  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(ymd || '');
+  return `${Number(m[2])}/${Number(m[3])}`;
+}
+
+function parseYmdToDate_(ymd){
+  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+function formatYmd_(d){
+  const y = d.getFullYear();
+  const m = ('0' + (d.getMonth() + 1)).slice(-2);
+  const day = ('0' + d.getDate()).slice(-2);
+  return `${y}-${m}-${day}`;
+}
+
+function getTodayYmd_(){
+  return formatYmd_(new Date());
+}
+
+function escapeHtml_(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+</script>
