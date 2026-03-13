@@ -1,425 +1,438 @@
 <script>
 window.CaseWbsState = {
   type: 'SV',
-  rawRows: [],
+  maxDays: 62,
+  rangeDays: 62,
   startDate: '',
-  months: 1.5
+  rows: [],
+  filteredRows: [],
+  members: [],
+  selectedMember: '',
+  holidaySet: new Set(),
 };
 
-function switchWbsType(type){
-  type = String(type || 'SV').trim().toUpperCase();
-  if (type !== 'CL') type = 'SV';
+const $cw = (id) => document.getElementById(id);
 
-  window.CaseWbsState.type = type;
+async function loadCaseWbs() {
+  const typeEl   = $cw('caseWbsType');
+  const dateEl   = $cw('caseWbsStartDate');
+  const rangeEl  = $cw('caseWbsRange');
+  const memberEl = $cw('caseWbsMemberFilter');
+  const reloadEl = $cw('caseWbsReloadBtn');
 
-  const svBtn = document.getElementById('wbsTabSV');
-  const clBtn = document.getElementById('wbsTabCL');
-  if (svBtn) svBtn.classList.toggle('active', type === 'SV');
-  if (clBtn) clBtn.classList.toggle('active', type === 'CL');
+  if (!typeEl || !dateEl || !rangeEl || !memberEl) return;
 
-  loadCaseWbs();
-}
+  const today = new Date();
+  const defaultStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-function loadCaseWbs(){
-  const root = document.getElementById('caseWbsRoot');
-  if (!root) return;
+  dateEl.value = formatDateInput_(defaultStart);
+  CaseWbsState.startDate = dateEl.value;
+  CaseWbsState.type = normalizeCaseTypeClient_(typeEl.value || 'SV');
+  CaseWbsState.rangeDays = Number(rangeEl.value || 62);
+  CaseWbsState.selectedMember = '';
 
-  const type = window.CaseWbsState.type || 'SV';
-  root.innerHTML = `<div class="wbs-empty">読込中... (${escapeHtml_(type)})</div>`;
-
-  google.script.run
-    .withSuccessHandler(function(rows){
-      const list = Array.isArray(rows) ? rows : [];
-      window.CaseWbsState.rawRows = list;
-      initWbsStartDateIfNeeded_(list);
-      populateWbsMemberFilter_(list);
-      applyWbsFiltersAndRender();
-    })
-    .withFailureHandler(function(err){
-      const msg = err && err.message ? err.message : String(err || '読込エラー');
-      root.innerHTML = `<div class="wbs-empty" style="color:#dc2626;">${escapeHtml_(msg)}</div>`;
-    })
-    .api_getCaseWbsData(type);
-}
-
-function initWbsStartDateIfNeeded_(rows){
-  const input = document.getElementById('wbsStartDate');
-  if (!input) return;
-
-  if (input.value) {
-    window.CaseWbsState.startDate = input.value;
-    return;
-  }
-
-  const start = getDefaultStartDate_(rows);
-  input.value = start;
-  window.CaseWbsState.startDate = start;
-}
-
-function populateWbsMemberFilter_(rows){
-  const sel = document.getElementById('wbsMemberFilter');
-  if (!sel) return;
-
-  const current = sel.value || '';
-  const names = new Set();
-
-  (rows || []).forEach(function(r){
-    splitMemberNames_(r.manager).forEach(function(n){ names.add(n); });
-    splitMemberNames_(r.support).forEach(function(n){ names.add(n); });
-    splitMemberNames_(r.primary).forEach(function(n){ names.add(n); });
+  typeEl.addEventListener('change', async () => {
+    CaseWbsState.type = normalizeCaseTypeClient_(typeEl.value);
+    await loadCaseWbs_(CaseWbsState.type);
   });
 
-  const list = Array.from(names).filter(Boolean).sort(function(a, b){
-    return a.localeCompare(b, 'ja');
+  dateEl.addEventListener('change', () => {
+    CaseWbsState.startDate = dateEl.value || formatDateInput_(defaultStart);
+    applyCaseWbsFilters_();
+    renderCaseWbs_();
   });
 
-  sel.innerHTML = '<option value="">全員</option>' + list.map(function(n){
-    return `<option value="${escapeHtml_(n)}">${escapeHtml_(n)}</option>`;
-  }).join('');
+  rangeEl.addEventListener('change', () => {
+    CaseWbsState.rangeDays = Number(rangeEl.value || 62);
+    renderCaseWbs_();
+  });
 
-  if (current && list.includes(current)) sel.value = current;
-}
+  memberEl.addEventListener('change', () => {
+    CaseWbsState.selectedMember = String(memberEl.value || '').trim();
+    applyCaseWbsFilters_();
+    renderCaseWbs_();
+  });
 
-function applyWbsFiltersAndRender(){
-  const input = document.getElementById('wbsStartDate');
-  const memberEl = document.getElementById('wbsMemberFilter');
-
-  const startDate = input && input.value ? input.value : getTodayYmd_();
-  const memberFilter = memberEl ? String(memberEl.value || '').trim() : '';
-
-  window.CaseWbsState.startDate = startDate;
-
-  let rows = (window.CaseWbsState.rawRows || []).map(function(r){
-    const st = parseStatusText_(r.statusText || '');
-    return Object.assign({}, r, {
-      statusCase: st.caseStatus,
-      statusIn: st.inStatus,
-      statusOut: st.outStatus
+  if (reloadEl) {
+    reloadEl.addEventListener('click', async () => {
+      await loadCaseWbs_(CaseWbsState.type);
     });
-  });
-
-  if (memberFilter) {
-    rows = rows.filter(function(r){ return hasMember_(r, memberFilter); });
   }
-
-  rows = sortWbsRows_(rows);
-  renderCaseWbs(rows, startDate, window.CaseWbsState.months || 1.5);
+  await loadCaseWbsHoliday_();
+  await loadCaseWbs_(CaseWbsState.type);
 }
 
-function renderCaseWbs(rows, startDate, months){
-  const root = document.getElementById('caseWbsRoot');
+async function loadCaseWbs_(type) {
+  setCaseWbsErr_('');
+  setCaseWbsMeta_('読込中...');
+
+  try {
+    const res = await gasCall_('api_getCaseWbsRows', type);
+
+    if (!res || !res.ok) {
+      throw new Error((res && res.error) || '読込に失敗しました。');
+    }
+
+    CaseWbsState.type = normalizeCaseTypeClient_(res.type || type);
+    CaseWbsState.maxDays = Number(res.maxDays || 62);
+    CaseWbsState.rows = Array.isArray(res.rows) ? res.rows : [];
+    CaseWbsState.members = Array.isArray(res.members) ? res.members : [];
+
+    buildCaseWbsMemberFilter_(CaseWbsState.members, CaseWbsState.selectedMember);
+    applyCaseWbsFilters_();
+    renderCaseWbs_();
+
+  } catch (err) {
+    console.error(err);
+    setCaseWbsErr_(err && err.message ? err.message : String(err));
+    setCaseWbsMeta_('');
+    $cw('caseWbsRoot').innerHTML = '';
+  }
+}
+
+function applyCaseWbsFilters_() {
+  const selected = String(CaseWbsState.selectedMember || '').trim();
+
+  let rows = Array.isArray(CaseWbsState.rows) ? [...CaseWbsState.rows] : [];
+
+  if (selected) {
+    rows = rows.filter(r => {
+      const members = Array.isArray(r.members) ? r.members : [];
+      return members.includes(selected);
+    });
+  }
+
+  CaseWbsState.filteredRows = rows;
+}
+
+function renderCaseWbs_() {
+  const root = $cw('caseWbsRoot');
   if (!root) return;
+
+  const rows = Array.isArray(CaseWbsState.filteredRows) ? CaseWbsState.filteredRows : [];
+  const startDate = CaseWbsState.startDate || formatDateInput_(new Date());
+  const rangeDays = Number(CaseWbsState.rangeDays || 62);
+  const days = buildCaseWbsDays_(startDate, rangeDays);
 
   if (!rows.length) {
-    root.innerHTML = '<div class="wbs-empty">対象案件はありません。</div>';
+    root.innerHTML = `<div style="padding:16px;color:#64748b;">表示対象がありません。</div>`;
+    setCaseWbsMeta_(`0件`);
     return;
   }
 
-  const dates = buildFixedRangeDates_(startDate, months || 1.5);
-  const todayKey = getTodayYmd_();
-  const dayWidth = 26;
-  const ganttWidth = dates.length * dayWidth;
+  const html = `
+    <table class="case-wbs-table">
+      <thead>
+        <tr>
+          <th class="case-wbs-sticky-1 case-wbs-col-info">案件情報</th>
+          <th class="case-wbs-sticky-2 case-wbs-col-se">担当SE</th>
+          <th class="case-wbs-sticky-3 case-wbs-col-cat"></th>
+          <th class="case-wbs-sticky-4 case-wbs-col-status">ステータス</th>
+          <th class="case-wbs-sticky-5 case-wbs-col-period">期間</th>
+          <th class="case-wbs-chart-head">
+            <div class="case-wbs-days">
+              ${days.map(d => {
+                const cls = [
+                  'case-wbs-day-head',
+                  d.isWeekend ? 'is-weekend' : '',
+                  d.isHoliday ? 'is-holiday' : '',
+                  d.isToday ? 'is-today' : '',
+                ].filter(Boolean).join(' ');
 
-  let html = '';
-  html += '<table class="wbs-table">';
-  html += '<thead><tr>';
-  html += '<th class="wbs-col-case wbs-sticky-1">案件情報</th>';
-  html += '<th class="wbs-col-member wbs-sticky-2">担当SE</th>';
-  html += '<th class="wbs-col-cat wbs-sticky-3">カテゴリ</th>';
-  html += '<th class="wbs-col-status wbs-sticky-4">ステータス</th>';
-  html += '<th class="wbs-col-period wbs-sticky-5">期間</th>';
-  html += `<th class="wbs-col-gantt" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">`;
-  html += renderWbsHeader_(dates, todayKey, ganttWidth);
-  html += '</th>';
-  html += '</tr></thead><tbody>';
+                return `
+                  <div class="${cls}">
+                    <span>${d.label}</span>
+                    <span class="dow">${d.dow}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => renderCaseWbsCaseRows_(r, startDate, days)).join('')}
+      </tbody>
+    </table>
+  `;
 
-  rows.forEach(function(r){
-    html += renderWbsRow_(r, dates, todayKey, ganttWidth, dayWidth);
-  });
-
-  html += '</tbody></table>';
   root.innerHTML = html;
+  setCaseWbsMeta_(`${rows.length}件 / ${CaseWbsState.type}`);
 }
 
-function renderWbsHeader_(dates, todayKey, ganttWidth){
+function renderCaseWbsCaseRows_(r, baseDate, days) {
+  const infoHtml = buildCaseWbsInfoHtml_(r);
+  const seHtml   = buildCaseWbsSeHtml_(r);
+
+  const lines = Array.isArray(r.lines) ? r.lines : [];
+  const safeLines = [
+    lines[0] || { category: '案件', status: '', start: '', end: '' },
+    lines[1] || { category: '社内', status: '', start: '', end: '' },
+    lines[2] || { category: '社外', status: '', start: '', end: '' },
+  ];
+
+  return safeLines.map((line, idx) => {
+    const groupStartCls = idx === 0 ? 'is-group-start' : '';
+    const lineCls =
+      line.category === '案件' ? 'case-wbs-line-project' :
+      line.category === '社内' ? 'case-wbs-line-internal' :
+      'case-wbs-line-external';
+
+    return `
+      <tr class="case-wbs-row ${groupStartCls} ${lineCls}">
+        ${idx === 0 ? `<td class="case-wbs-sticky-1 case-wbs-col-info" rowspan="3">${infoHtml}</td>` : ''}
+        ${idx === 0 ? `<td class="case-wbs-sticky-2 case-wbs-col-se" rowspan="3">${seHtml}</td>` : ''}
+
+        <td class="case-wbs-sticky-3 case-wbs-col-cat">${escapeHtml_(line.category || '')}</td>
+        <td class="case-wbs-sticky-4 case-wbs-col-status">${buildCaseWbsStatusPill_(line.status)}</td>
+        <td class="case-wbs-sticky-5 case-wbs-col-period">${escapeHtml_(buildPeriodText_(line.start, line.end))}</td>
+        <td class="case-wbs-col-chart">${buildCaseWbsChart_(line, baseDate, days)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function buildCaseWbsInfoHtml_(r) {
   return `
-    <div class="wbs-gantt-head" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">
-      <div class="wbs-gantt-head-grid">
-        ${dates.map(function(d){
-          return `<div class="wbs-gantt-head-day ${d.isWeekend ? 'weekend' : ''} ${d.key === todayKey ? 'today' : ''}">${d.m}/${d.d}</div>`;
-        }).join('')}
+    <div class="case-wbs-info">
+      <div class="case-wbs-key">【${escapeHtml_(nzClient_(r.key))}】</div>
+      <div class="case-wbs-customer">${escapeHtml_(nzClient_(r.customer))}</div>
+    </div>
+  `;
+}
+
+function buildCaseWbsSeHtml_(r) {
+  const subs = [];
+  if (nzClient_(r.supervisor)) subs.push(`監督者：${escapeHtml_(r.supervisor)}`);
+  if (nzClient_(r.manager))    subs.push(`管理者：${escapeHtml_(r.manager)}`);
+  if (nzClient_(r.support))    subs.push(`サポート：${escapeHtml_(r.support)}`);
+
+  return `
+    <div class="case-wbs-se">
+      ${subs.length ? `<div class="case-wbs-se-sub">${subs.join('<br>')}</div>` : ''}
+    </div>
+  `;
+}
+
+function buildCaseWbsStatusPill_(status) {
+  const s = nzClient_(status);
+  if (!s) return `<span class="case-wbs-status-pill st-empty">-</span>`;
+
+  const cls = statusClassClient_(s);
+  return `<span class="case-wbs-status-pill ${cls}">${escapeHtml_(s)}</span>`;
+}
+
+function buildCaseWbsChart_(line, baseDate, days) {
+  const start = nzClient_(line.start);
+  const end   = nzClient_(line.end);
+
+  const dayCols = days.map(d => {
+    const cls = [
+      'case-wbs-chart-day',
+      d.isWeekend ? 'is-weekend' : '',
+      d.isHoliday ? 'is-holiday' : '',
+      d.isToday ? 'is-today' : '',
+    ].filter(Boolean).join(' ');
+
+    return `<div class="${cls}"></div>`;
+  }).join('');
+
+  if (!start || !end) {
+    return `
+      <div class="case-wbs-chart">
+        ${dayCols}
+        <div class="case-wbs-empty-bar"></div>
       </div>
-    </div>
-  `;
-}
-
-function renderWbsRow_(r, dates, todayKey, ganttWidth, dayWidth){
-  return `
-    <tr>
-      <td class="wbs-casecell wbs-col-case wbs-sticky-1">
-        <div class="wbs-cellbox">
-          <div class="wbs-case-key">[${escapeHtml_(r.key || '')}]</div>
-          <div class="wbs-case-customer">${escapeHtml_(r.customer || '')}</div>
-        </div>
-      </td>
-
-      <td class="wbs-membercell wbs-col-member wbs-sticky-2">
-        <div class="wbs-cellbox">
-          <div class="wbs-member-line">管理者：${escapeHtml_(r.manager || 'ー')}</div>
-          <div class="wbs-member-line">サポート：${escapeHtml_(r.support || 'ー')}</div>
-        </div>
-      </td>
-
-      <td class="wbs-col-cat wbs-sticky-3">
-        <div class="wbs-stack">
-          ${renderWbsCategoryLane_('案件', 'case')}
-          ${renderWbsCategoryLane_('社内', 'in')}
-          ${renderWbsCategoryLane_('社外', 'out')}
-        </div>
-      </td>
-
-      <td class="wbs-col-status wbs-sticky-4">
-        <div class="wbs-stack">
-          ${renderWbsStatusLane_(r.statusCase)}
-          ${renderWbsStatusLane_(r.statusIn)}
-          ${renderWbsStatusLane_(r.statusOut)}
-        </div>
-      </td>
-
-      <td class="wbs-col-period wbs-sticky-5">
-        <div class="wbs-stack">
-          ${renderWbsPeriodLane_(r.caseStart, r.caseEnd)}
-          ${renderWbsPeriodLane_(r.inStart, r.inEnd)}
-          ${renderWbsPeriodLane_(r.outStart, r.outEnd)}
-        </div>
-      </td>
-
-      <td class="wbs-gantt-cell" style="width:${ganttWidth}px;min-width:${ganttWidth}px;max-width:${ganttWidth}px;">
-        <div class="wbs-gantt-stack">
-          ${renderWbsGanttLane_(dates, r.caseStart, r.caseEnd, 'case', false, todayKey, dayWidth)}
-          ${renderWbsGanttLane_(dates, r.inStart, r.inEnd, 'in', false, todayKey, dayWidth)}
-          ${renderWbsGanttLane_(dates, r.outStart, r.outEnd, 'out', isOverDue_(r.caseEnd, todayKey, r.statusText), todayKey, dayWidth)}
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
-function renderWbsCategoryLane_(label, kind){
-  return `
-    <div class="wbs-stack-row">
-      <div class="wbs-cat-lane ${kind}">${escapeHtml_(label)}</div>
-    </div>
-  `;
-}
-
-function renderWbsStatusLane_(status){
-  return `
-    <div class="wbs-stack-row">
-      <div class="wbs-status-lane">
-        ${renderWbsChip_(status)}
-      </div>
-    </div>
-  `;
-}
-
-function renderWbsPeriodLane_(start, end){
-  return `
-    <div class="wbs-stack-row">
-      <div class="wbs-period-lane">
-        ${escapeHtml_(fmtPeriod_(start, end) || '－')}
-      </div>
-    </div>
-  `;
-}
-
-function renderWbsGanttLane_(dates, start, end, type, isOver, todayKey, dayWidth){
-  const range = clipRangeToVisible_(dates, start, end);
-  const todayIdx = dates.findIndex(function(d){ return d.key === todayKey; });
-  const todayLeft = todayIdx >= 0 ? (todayIdx * dayWidth) + 'px' : '-9999px';
-
-  let barHtml = '';
-  if (range) {
-    const left = range.startIdx * dayWidth + 1;
-    const width = Math.max(((range.endIdx - range.startIdx + 1) * dayWidth) - 2, 12);
-    const label = width >= 60 ? fmtPeriod_(start, end) : '';
-
-    const cls = isOver
-      ? 'wbs-bar wbs-bar-over'
-      : type === 'case'
-        ? 'wbs-bar wbs-bar-case'
-        : type === 'in'
-          ? 'wbs-bar wbs-bar-in'
-          : 'wbs-bar wbs-bar-out';
-
-    barHtml = `<div class="${cls}" style="left:${left}px;width:${width}px;">${escapeHtml_(label)}</div>`;
+    `;
   }
 
+  const startOffset = diffDays_(baseDate, start);
+  const endOffset   = diffDays_(baseDate, end);
+
+  const totalDays = days.length;
+  const leftIndex = Math.max(0, startOffset);
+  const rightIndex = Math.min(totalDays - 1, endOffset);
+
+  if (rightIndex < 0 || leftIndex > totalDays - 1 || rightIndex < leftIndex) {
+    return `<div class="case-wbs-chart">${dayCols}</div>`;
+  }
+
+  const widthDays = Math.max(1, rightIndex - leftIndex + 1);
+  const isClosed = /クローズ|close/i.test(nzClient_(line.status));
+  const today = formatDateInput_(new Date());
+  const isOverdue = !isClosed && end < today;
+
+  const barClass =
+    line.category === '案件' ? 'project' :
+    line.category === '社内' ? 'internal' :
+    'external';
+
+  const label = buildBarLabel_(start, end);
+
   return `
-    <div class="wbs-gantt-row" style="--today-left:${todayLeft};">
-      ${barHtml}
+    <div class="case-wbs-chart">
+      ${dayCols}
+      <div class="case-wbs-bar ${barClass} ${isOverdue ? 'overdue' : ''}"
+          style="
+            left:calc(${leftIndex} * var(--case-wbs-day-w) + 2px);
+            width:calc(${widthDays}* var(--case-wbs-day-w) - 20px);
+          ">
+        ${escapeHtml_(label)}
+      </div>
     </div>
   `;
 }
 
-function renderWbsChip_(status){
-  const s = String(status || '').replace(/\s+/g, '').trim();
-  if (!s) return '<span class="wbs-chip wbs-chip-empty">－</span>';
-  return `<span class="wbs-chip ${getWbsChipClass_(s)}">${escapeHtml_(s)}</span>`;
+function buildBarLabel_(start, end) {
+  if (!start || !end) return '';
+  const s = mdLabel_(start);
+  const e = mdLabel_(end);
+  return start === end ? s : `${s}〜${e}`;
 }
 
-function getWbsChipClass_(s){
-  if (/未着手|未対応|未実施/.test(s)) return 'wbs-chip-mitei';
-  if (/対応中|進行中|作業中|確認中|事前確認中|アサイン中/.test(s)) return 'wbs-chip-tyu';
-  if (/完了|済/.test(s)) return 'wbs-chip-kanryo';
-  if (/クローズ|CLOSE/i.test(s)) return 'wbs-chip-close';
-  if (/保留|停止|延期/.test(s)) return 'wbs-chip-horyu';
-  return 'wbs-chip-michaku';
+function buildPeriodText_(start, end) {
+  if (!start && !end) return '';
+  if (start && end) {
+    return start === end ? mdLabel_(start) : `${mdLabel_(start)}〜${mdLabel_(end)}`;
+  }
+  return start || end || '';
 }
 
-function parseStatusText_(text){
-  const result = { caseStatus:'', inStatus:'', outStatus:'' };
-  if (!text) return result;
+function buildCaseWbsDays_(startDate, count) {
+  const out = [];
+  const base = parseDateLocal_(startDate);
+  const today = formatDateInput_(new Date());
+  const holidaySet = CaseWbsState.holidaySet || new Set();
 
-  String(text)
-    .replace(/\r/g, '')
-    .split('\n')
-    .map(function(v){ return v.trim(); })
-    .filter(Boolean)
-    .forEach(function(line){
-      if (line.indexOf('案件ST') === 0) result.caseStatus = cleanStatus_(splitByColon_(line));
-      else if (line.indexOf('社内') === 0) result.inStatus = cleanStatus_(splitByColon_(line));
-      else if (line.indexOf('現地') === 0 || line.indexOf('社外') === 0) result.outStatus = cleanStatus_(splitByColon_(line));
+  for (let i = 0; i < count; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+    const ymd = formatDateInput_(d);
+    const dowNum = d.getDay();
+    const isWeekend = dowNum === 0 || dowNum === 6;
+    const isHoliday = holidaySet.has(ymd);
+
+    out.push({
+      ymd,
+      label: `${d.getMonth() + 1}/${d.getDate()}`,
+      dow: ['日', '月', '火', '水', '木', '金', '土'][dowNum],
+      isWeekend,
+      isHoliday,
+      isToday: ymd === today,
     });
+  }
 
-  return result;
+  return out;
 }
 
-function splitByColon_(s){
-  const m = String(s || '').match(/^[^:：]+[:：](.*)$/);
-  return m ? m[1] : '';
+function buildCaseWbsMemberFilter_(members, selectedMember) {
+  const el = $cw('caseWbsMemberFilter');
+  if (!el) return;
+
+  const current = String(selectedMember || '').trim();
+
+  el.innerHTML = [
+    `<option value="">全員</option>`,
+    ...(members || []).map(name => {
+      const sel = current === name ? ' selected' : '';
+      return `<option value="${escapeAttr_(name)}"${sel}>${escapeHtml_(name)}</option>`;
+    })
+  ].join('');
 }
 
-function cleanStatus_(s){
-  if (!s) return '';
-  return String(s).replace(/\s+/g, '').replace(/Doc.*$/i, '').trim();
+function getMultiSelectValues_(el) {
+  return Array.from(el.options)
+    .filter(opt => opt.selected)
+    .map(opt => String(opt.value || '').trim())
+    .filter(Boolean);
 }
 
-function splitMemberNames_(v){
-  return String(v || '')
-    .split(/[\/,，、\s]+/)
-    .map(function(s){ return s.trim(); })
-    .filter(Boolean)
-    .filter(function(s){ return s !== 'ー' && s !== '-'; });
+function normalizeCaseTypeClient_(type) {
+  return String(type || 'SV').toUpperCase() === 'CL' ? 'CL' : 'SV';
 }
 
-function hasMember_(r, name){
-  const list = []
-    .concat(splitMemberNames_(r.manager))
-    .concat(splitMemberNames_(r.support))
-    .concat(splitMemberNames_(r.primary));
-  return list.includes(name);
+function statusClassClient_(s) {
+  const v = String(s || '');
+
+  if (/完了/.test(v)) return 'st-done';
+  if (/対応中|進行中|作業中/.test(v)) return 'st-progress';
+  if (/保留|確認待ち|未対応|未着手/.test(v)) return 'st-wait';
+  if (/クローズ|close/i.test(v)) return 'st-close';
+  return '';
 }
 
-function sortWbsRows_(rows){
-  return rows.slice().sort(function(a, b){
-    const ad = a.caseStart || a.inStart || a.outStart || '9999-12-31';
-    const bd = b.caseStart || b.inStart || b.outStart || '9999-12-31';
-    if (ad < bd) return -1;
-    if (ad > bd) return 1;
-    return String(a.key || '').localeCompare(String(b.key || ''), 'ja');
+function setCaseWbsMeta_(msg) {
+  const el = $cw('caseWbsMeta');
+  if (el) el.textContent = String(msg || '');
+}
+
+function setCaseWbsErr_(msg) {
+  const el = $cw('caseWbsErr');
+  if (el) el.textContent = String(msg || '');
+}
+
+function gasCall_(fn, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)[fn](...args);
   });
 }
 
-function buildFixedRangeDates_(startYmd, months){
-  const start = parseYmdToDate_(startYmd) || new Date();
-  const totalDays = Math.max(30, Math.round((months || 1.5) * 30));
-  const arr = [];
-  const d = new Date(start);
+function escapeHtml_(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
-  for (let i = 0; i < totalDays; i++) {
-    arr.push({
-      key: formatYmd_(d),
-      m: d.getMonth() + 1,
-      d: d.getDate(),
-      isWeekend: d.getDay() === 0 || d.getDay() === 6
-    });
-    d.setDate(d.getDate() + 1);
+function escapeAttr_(s) {
+  return escapeHtml_(s);
+}
+
+function nzClient_(v) {
+  return String(v ?? '').trim();
+}
+
+function parseDateLocal_(ymd) {
+  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
   }
-  return arr;
-}
-
-function clipRangeToVisible_(dates, start, end){
-  if (!start || !end || !dates.length) return null;
-
-  const firstKey = dates[0].key;
-  const lastKey = dates[dates.length - 1].key;
-  if (end < firstKey || start > lastKey) return null;
-
-  const visibleStart = start < firstKey ? firstKey : start;
-  const visibleEnd = end > lastKey ? lastKey : end;
-
-  const startIdx = dates.findIndex(function(d){ return d.key === visibleStart; });
-  const endIdx = dates.findIndex(function(d){ return d.key === visibleEnd; });
-
-  if (startIdx < 0 || endIdx < 0 || endIdx < startIdx) return null;
-  return { startIdx:startIdx, endIdx:endIdx };
-}
-
-function getDefaultStartDate_(rows){
-  let min = '';
-  (rows || []).forEach(function(r){
-    [r.caseStart, r.inStart, r.outStart].forEach(function(v){
-      if (!v) return;
-      if (!min || v < min) min = v;
-    });
-  });
-  return min || getTodayYmd_();
-}
-
-function isOverDue_(caseEnd, todayKey, statusText){
-  if (!caseEnd) return false;
-  if (/クローズ|CLOSE/i.test(String(statusText || ''))) return false;
-  return caseEnd < todayKey;
-}
-
-function fmtPeriod_(s, e){
-  if (!s && !e) return '';
-  if (s && !e) return fmtMd_(s);
-  if (!s && e) return fmtMd_(e);
-  if (s === e) return fmtMd_(s);
-  return `${fmtMd_(s)}〜${fmtMd_(e)}`;
-}
-
-function fmtMd_(ymd){
-  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return String(ymd || '');
-  return `${Number(m[2])}/${Number(m[3])}`;
-}
-
-function parseYmdToDate_(ymd){
-  const m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return null;
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
-function formatYmd_(d){
+function formatDateInput_(d) {
   const y = d.getFullYear();
   const m = ('0' + (d.getMonth() + 1)).slice(-2);
   const day = ('0' + d.getDate()).slice(-2);
   return `${y}-${m}-${day}`;
 }
 
-function getTodayYmd_(){
-  return formatYmd_(new Date());
+function diffDays_(baseYmd, targetYmd) {
+  const a = parseDateLocal_(baseYmd);
+  const b = parseDateLocal_(targetYmd);
+  return Math.floor((b - a) / 86400000);
 }
 
-function escapeHtml_(s){
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function mdLabel_(ymd) {
+  const d = parseDateLocal_(ymd);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+async function loadCaseWbsHoliday_() {
+  try {
+    const res = await gasCall_('api_getPlanHolidayList');
+    if (res && res.ok && Array.isArray(res.dates)) {
+      CaseWbsState.holidaySet = new Set(res.dates);
+    } else {
+      CaseWbsState.holidaySet = new Set();
+    }
+  } catch (err) {
+    console.error(err);
+    CaseWbsState.holidaySet = new Set();
+  }
 }
 </script>

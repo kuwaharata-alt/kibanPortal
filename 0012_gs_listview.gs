@@ -143,26 +143,57 @@ function fmtDetailDate_(v) {
  * ========================= */
 
 function syncCaseSheetAfterStatusSave_(type, rowNoM, shM, hmM, master, statusMap, naSet, currentCode) {
-  const oc = openCloseFromCode_(currentCode);
+  const updater = getActiveUserNameOrEmail_();
+
+  const inBig   = '社内作業';
+  const outBig  = (normalizeCaseType_(type) === 'CL') ? '現地作業' : '現地・リモート作業';
+  const docBig  = 'ドキュメント';
+
+  const inSt  = resolveBigRollupState_(master, statusMap, naSet, inBig);
+  const outSt = resolveBigRollupState_(master, statusMap, naSet, outBig);
+  const docSt = hasBigInMaster_(master, docBig)
+    ? resolveBigRollupState_(master, statusMap, naSet, docBig)
+    : '';
+
+  const caseSt = resolveCaseStatusByRule_(type, master, statusMap, naSet);
+
+  const summaryText = [
+    `案件ST：${caseSt || ''}`,
+    `社内：${inSt || ''}　現地：${outSt || ''}` + (docSt ? `　Doc.：${docSt}` : '')
+  ].join('\n');
+
+  const updates = {};
+
+  // 既存要約欄
+  if (hmM[STATUS_APP_CONFIG.CASE_STATUS_HEADER]) {
+    updates[hmM[STATUS_APP_CONFIG.CASE_STATUS_HEADER]] = summaryText;
+  }
+
+  // 個別欄
+  if (hmM['案件ST']) updates[hmM['案件ST']] = caseSt || '';
+  if (hmM['社内ST']) updates[hmM['社内ST']] = inSt || '';
+  if (hmM['現地ST']) updates[hmM['現地ST']] = outSt || '';
+  if (hmM['Doc.ST']) updates[hmM['Doc.ST']] = docSt || '';
+  if (hmM['DocST'])  updates[hmM['DocST']]  = docSt || '';
+
+  // メタ
+  if (hmM[STATUS_APP_CONFIG.UPDATE_AT_HEADER]) {
+    updates[hmM[STATUS_APP_CONFIG.UPDATE_AT_HEADER]] = nowYmd_(true);
+  }
+  if (hmM[STATUS_APP_CONFIG.UPDATE_BY_HEADER]) {
+    updates[hmM[STATUS_APP_CONFIG.UPDATE_BY_HEADER]] = updater;
+  }
+  if (hmM[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]) {
+    updates[hmM[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]] = currentCode || '';
+  }
   if (hmM['open/close']) {
-    shM.getRange(rowNoM, hmM['open/close']).setValue(oc);
+    updates[hmM['open/close']] = (caseSt === '案件クローズ') ? 'close' : 'open';
   }
 
-  const viewText = buildStatusTextForView_(type, master, statusMap, naSet);
-  if (hmM['ステータス']) {
-    shM.getRange(rowNoM, hmM['ステータス']).setValue(viewText || '');
-  }
+  const cols = Object.keys(updates).map(Number).filter(Boolean);
+  if (!cols.length) return;
 
-  const noteText = buildCommentsNoteText_(type, statusMap);
-  if (hmM['備考']) {
-    shM.getRange(rowNoM, hmM['備考']).setValue(noteText || '');
-  }
-
-  const rowValuesM = shM.getRange(rowNoM, 1, 1, shM.getLastColumn()).getValues()[0];
-  const summary = buildWorkSummary2Line_(rowValuesM, hmM);
-  if (hmM['作業概要']) {
-    shM.getRange(rowNoM, hmM['作業概要']).setValue(summary || '');
-  }
+  writeSameRowByCols_(shM, rowNoM, cols, col => updates[col]);
 }
 
 function buildCodeToSmallMap_(masterRows) {
@@ -430,4 +461,77 @@ function getByHeader_(row, headerMap, headerName) {
   const col = headerMap[headerName];
   if (!col) return '';
   return row[col - 1];
+}
+
+function hasBigInMaster_(master, big) {
+  return (master?.groups || []).some(g => norm_(g.big) === norm_(big));
+}
+
+function resolveCurrentCaseStatusLabel_(master, currentCode, fallback) {
+  const code = norm_(currentCode);
+  if (!code) return fallback || '';
+
+  const row = (master?.rows || []).find(r => norm_(r.code) === code);
+  if (!row) return fallback || '';
+
+  return row.display || row.small || fallback || '';
+}
+
+function resolveBigSummaryState_(master, statusMap, naSet, big) {
+  big = norm_(big);
+  if (!big) return '';
+
+  if (naSet && naSet[big]) return 'ー';
+
+  const group = (master?.groups || []).find(g => norm_(g.big) === big);
+  if (!group) return '';
+
+  const mids = group.mids || [];
+  if (!mids.length) return '';
+
+  const states = mids.map(m => {
+    const key = 'ST_' + big + '__' + m.mid;
+    const raw = statusMap[key];
+    return normalizeSummaryValueForCaseSheet_(raw, !!m.is_date);
+  }).filter(v => v !== '');
+
+  if (!states.length) return '未着手';
+
+  // すべて対応無
+  if (states.every(v => v === 'ー')) return 'ー';
+
+  // 1つでも対応中があれば対応中
+  if (states.some(v => v === '対応中')) return '対応中';
+
+  // 完了と対応無のみで構成、かつ完了が1つでもあるなら完了
+  if (states.some(v => v === '完了') && states.every(v => v === '完了' || v === 'ー')) {
+    return '完了';
+  }
+
+  // すべて未着手 or 対応無
+  if (states.every(v => v === '未着手' || v === 'ー')) return '未着手';
+
+  // 完了・未着手が混在 → 対応中
+  if (states.some(v => v === '完了') && states.some(v => v === '未着手')) return '対応中';
+
+  return '未着手';
+}
+
+function normalizeSummaryValueForCaseSheet_(raw, isDate) {
+  if (raw == null || raw === '') return '';
+
+  // 日付項目は値が入っていれば完了扱い
+  if (isDate) return '完了';
+
+  const s = String(raw).trim();
+  if (!s) return '';
+  if (s === 'ー' || s === '-' || s === '—') return 'ー';
+  if (s.includes('対応無')) return 'ー';
+  if (s.includes('完了')) return '完了';
+  if (s.includes('未着手')) return '未着手';
+  if (s.includes('未入荷')) return '未着手';
+  if (s.includes('対応中')) return '対応中';
+
+  // コードや表示名が直接入るケースに備えて保険
+  return '対応中';
 }

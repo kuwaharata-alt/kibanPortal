@@ -1,30 +1,47 @@
 <section id="panel-wbs" class="panel">
-  <div class="wbs-toolbar">
-    <div class="wbs-toolbar-left">
-      <div class="wbs-tabs">
-        <button type="button" id="wbsTabSV" class="wbs-tab active" onclick="switchWbsType('SV')">SV</button>
-        <button type="button" id="wbsTabCL" class="wbs-tab" onclick="switchWbsType('CL')">CL</button>
+  <div class="case-wbs-toolbar-wrap">
+    <div class="case-wbs-toolbar">
+      <div class="case-wbs-toolbar-left">
+        <div class="case-wbs-field">
+          <label for="caseWbsType">区分</label>
+          <select id="caseWbsType">
+            <option value="SV">SV</option>
+            <option value="CL">CL</option>
+          </select>
+        </div>
+
+        <div class="case-wbs-field">
+          <label for="caseWbsStartDate">開始日</label>
+          <input type="date" id="caseWbsStartDate">
+        </div>
+
+        <div class="case-wbs-field">
+          <label for="caseWbsRange">表示日数</label>
+          <select id="caseWbsRange">
+            <option value="31">1か月</option>
+            <option value="62" selected>2か月</option>
+            <option value="93">3か月</option>
+            <option value="186">6か月</option>
+          </select>
+        </div>
+
+        <div class="case-wbs-field case-wbs-field-member">
+          <label for="caseWbsMemberFilter">担当者</label>
+          <select id="caseWbsMemberFilter"></select>
+        </div>
       </div>
 
-      <div class="wbs-filter">
-        <label class="small" for="wbsStartDate">開始日</label>
-        <input type="date" id="wbsStartDate" onchange="applyWbsFiltersAndRender()">
+      <div class="case-wbs-toolbar-right">
+        <div id="caseWbsErr" class="err"></div>
+        <div id="caseWbsMeta" class="small"></div>
       </div>
-
-      <div class="wbs-filter">
-        <label class="small" for="wbsMemberFilter">担当者</label>
-        <select id="wbsMemberFilter" onchange="applyWbsFiltersAndRender()">
-          <option value="">全員</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="wbs-toolbar-right">
-      <button type="button" class="btn" onclick="loadCaseWbs()">再読込</button>
     </div>
   </div>
 
-  <div class="card">
-    <div id="caseWbsRoot" class="wbs-root">未読込</div>
+  <div class="card case-wbs-card">
+
+    <div class="case-wbs-shell">
+      <div id="caseWbsRoot" class="case-wbs-root"></div>
+    </div>
   </div>
 </section>

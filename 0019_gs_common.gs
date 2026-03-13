@@ -355,3 +355,51 @@ function writeSameRowByCols_(sh, rowNo, cols, valueResolver) {
 
   sh.getRange(rowNo, minCol, 1, width).setValues([cur]);
 }
+
+function formatInspectYm_(v) {
+  if (v == null || v === '') return '';
+
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v.getTime())) {
+    return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy年M月');
+  }
+
+  const s = String(v).trim();
+  if (!s) return '';
+
+  let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-]\d{1,2}$/);
+  if (m) return `${m[1]}年${Number(m[2])}月`;
+
+  m = s.match(/^(\d{4})[\/\-](\d{1,2})$/);
+  if (m) return `${m[1]}年${Number(m[2])}月`;
+
+  return s;
+}
+
+function api_getInspectMonths() {
+
+  const ss = getSS_('案件');
+  const sh = ss.getSheetByName('案件管理表');
+
+  const values = sh.getDataRange().getValues();
+  const header = values[0];
+
+  const col = header.indexOf('検収予定');
+
+  const set = new Set();
+
+  for (let i = 1; i < values.length; i++) {
+
+    const v = values[i][col];
+    if (!v) continue;
+
+    const d = new Date(v);
+
+    const ym =
+      d.getFullYear() + '/' +
+      ('0' + (d.getMonth() + 1)).slice(-2);
+
+    set.add(ym);
+  }
+
+  return Array.from(set).sort();
+}

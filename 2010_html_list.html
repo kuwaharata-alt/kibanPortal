@@ -17,8 +17,12 @@
         </button>
         <div class="st-menu" id="statusMenu"></div>
       </div>
-
       <div class="small" id="memberSelected" style="margin-left:8px;"></div>
+
+      <select id="inspectMonth">
+        <option value="">検収予定：すべて</option>
+      </select>
+
     </div>
 
     <!-- 右：検索 -->
@@ -36,14 +40,13 @@
     <div style="overflow:auto; max-height:80vh;">
       <table id="tbl">
           <colgroup>
-            <col style="width:3%">
+            <col style="width:5%">
             <col style="width:10%">
-            <col style="width:6%">
-            <col style="width:13%">
-            <col style="width:13%">
-            <col style="width:8%">
+            <col style="width:15%">
             <col style="width:20%">
-            <col style="width:20%">
+            <col style="width:10%">
+            <col style="width:13%">
+            <col style="width:22%">
           </colgroup>
         <thead><tr id="thead"></tr></thead>
         <tbody id="tbody"></tbody>

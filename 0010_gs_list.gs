@@ -19,22 +19,24 @@ const VIEW_CONFIG = {
   SV: {
     sheetName: WEBVIEW.SHEET_SV,
     keyHeader: WEBVIEW.KEY_HEADER,
-    list: ['ステータス', '見積番号', '案件名', '作業概要', '担当SE', '作業期間', '備考'],
+    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業期間', '備考'],
   },
   CL: {
     sheetName: WEBVIEW.SHEET_CL,
     keyHeader: WEBVIEW.KEY_HEADER,
-    list: ['ステータス', '見積番号', '案件名', '作業概要', '担当SE', '作業期間', '備考'],
+    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業期間', '備考'],
   }
 };
 
 const VIRTUAL_HEADERS = [
-  '案件名',
+  'ステータス',
+  '案件概要',
+  '案件情報',
   '担当SE',
   '作業期間',
-  '作業概要',
   'カテゴリ'
 ];
+
 
 /** ----------------------------------------------------
  *   メインAPI（一覧）
@@ -46,9 +48,12 @@ function api_list(params) {
 
   const q = String(p.q || '').trim().toLowerCase();
   const hideClosed = p.hideClosed !== false;
+  const members = Array.isArray(p.members) ? p.members : [];
 
   const pageSize = Math.min(Math.max(Number(p.pageSize || 50), 10), 500);
   const page = Math.max(Number(p.page || 1), 1);
+
+  const inspectMonth = params.inspectMonth || '';
 
   const sh = getSS_('Display').getSheetByName(cfg.sheetName);
   if (!sh) {
@@ -70,8 +75,6 @@ function api_list(params) {
 
   const readRows = Math.min(lastRow, WEBVIEW.MAX_ROWS);
 
-  // 高速化ポイント1:
-  // displayValues ではなく values で取得し、必要時のみ文字列化
   const values = sh.getRange(1, 1, readRows, lastCol).getValues();
 
   const headers = values[0].map(normCell_);
@@ -84,9 +87,12 @@ function api_list(params) {
     '顧客名',
     '案件概要',
     '案件名',
+    '見積',
     '作業内容',
     '作業形態',
     '現地作業場所',
+    '最寄り',
+    '検収予定',
     '監督者',
     '管理者',
     'サポート',
@@ -95,10 +101,13 @@ function api_list(params) {
   ]);
 
   const statusData = buildStatusRowMapFast_(type);
-
-  // 高速化ポイント2:
-  // 検索対象は必要最小限の列だけにして、1行ごとに1回だけ連結
   const searchIndexes = buildSearchIndexes_(headerMap, cfg.list, VIRTUAL_HEADERS);
+
+  const colDirector = headerMap['監督者'];
+  const colManager = headerMap['管理者'];
+  const colSupport = headerMap['サポート'];
+
+  const colInspect = headerMap['検収予定'];
 
   const filtered = [];
   for (let r = 1; r < values.length; r++) {
@@ -108,6 +117,39 @@ function api_list(params) {
       const st = getByIndex_(row, idxMap[WEBVIEW.STATUS_HEADER]);
       if (WEBVIEW.CLOSED_WORDS.some(w => st.indexOf(w) !== -1)) continue;
     }
+
+    // 担当者フィルタ
+    if (members && members.length > 0) {
+      const director = String(row[colDirector] || '');
+      const manager = String(row[colManager] || '');
+      const support = String(row[colSupport] || '');
+
+      const match = members.some(m =>
+        director.includes(m) || manager.includes(m) || support.includes(m)
+      );
+
+      if (!match) continue;
+    }
+
+    // 検収予定月
+    if (inspectMonth) {
+
+      const inspect = row[colInspect];
+
+      if (inspect) {
+
+        const d = new Date(inspect);
+        const ym =
+          d.getFullYear() + '/' +
+          ('0' + (d.getMonth() + 1)).slice(-2);
+
+        if (ym !== inspectMonth) continue;
+
+      } else {
+        continue;
+      }
+    }
+
 
     if (q) {
       const searchText = buildSearchText_(row, searchIndexes);
@@ -124,16 +166,23 @@ function api_list(params) {
   const rows = pageRows.map(r => {
     const row = values[r];
     const key = getByIndex_(row, idxMap[WEBVIEW.KEY_HEADER]);
+    const customer = getByIndex_(row, idxMap['顧客名']);
     const statusRow = statusData.rowMap[key] || null;
 
     const virtual = buildVirtualColumnsFast_(row, idxMap, statusRow, statusData.headerMap, type);
 
-    return cfg.list.map(h => {
+    const cells = cfg.list.map(h => {
       if (virtual[h] !== undefined) return virtual[h];
 
       const idx = headerMap[h];
       return idx !== undefined ? stringifyCell_(row[idx]) : '';
     });
+
+    return {
+      key,
+      customer,
+      cells
+    };
   });
 
   return {
@@ -151,10 +200,11 @@ function api_list(params) {
  *  ---------------------------------------------------- */
 function buildVirtualColumnsFast_(caseRow, idxMap, statusRow, statusHeaderMap, type) {
   return {
-    '案件名': buildProjectNameFast_(caseRow, idxMap),
+    'ステータス': buildStatusSummaryHtmlFast_(statusRow, statusHeaderMap),
+    '案件概要': buildProjectSummaryFast_(caseRow, idxMap),
+    '案件情報': buildCaseInfoFast_(caseRow, idxMap),
     '担当SE': buildTantoSeFast_(caseRow, idxMap),
     '作業期間': buildWorkPeriodHtmlFast_(caseRow, idxMap, statusRow, statusHeaderMap, type),
-    '作業概要': buildWorkSummaryFast_(caseRow, idxMap),
     'カテゴリ': buildCategoryTagsFast_(caseRow, idxMap),
   };
 }
@@ -163,29 +213,144 @@ function buildVirtualColumnsFast_(caseRow, idxMap, statusRow, statusHeaderMap, t
  *   仮想列ロジック（高速化版）
  *  ---------------------------------------------------- */
 
-/** 案件名 */
-function buildProjectNameFast_(row, idxMap) {
-  const key = getByIndex_(row, idxMap['顧客名']);
-  const summary = getByIndex_(row, idxMap['案件概要']) || getByIndex_(row, idxMap['案件名']);
+/** ステータス */
+function buildStatusSummaryHtmlFast_(statusRow, statusHeaderMap) {
+  if (!statusRow || !statusHeaderMap) return '';
 
-  if (key && summary) return `【${key}】\n${summary}`;
-  if (key) return `【${key}】`;
-  return summary || '';
+  const caseSt = getStatusSummaryCell_(statusRow, statusHeaderMap, ['案件ST']);
+  const inSt = getStatusSummaryCell_(statusRow, statusHeaderMap, ['社内ST']);
+  const outSt = getStatusSummaryCell_(statusRow, statusHeaderMap, ['現地ST']);
+  const docSt = getStatusSummaryCell_(statusRow, statusHeaderMap, ['Doc.ST', 'DocST']);
+
+  return [
+    `案件ST：${caseSt || ''}`,
+    `社内：${inSt || ''}　現地：${outSt || ''}　Doc.：${docSt || ''}`
+  ].join('\n');
+}
+
+function getStatusSummaryCell_(row, headerMap, names) {
+  for (let i = 0; i < (names || []).length; i++) {
+    const idx = headerMap[names[i]];
+    if (idx === undefined) continue;
+    const v = row[idx];
+    if (v == null || v === '') continue;
+    return String(v).trim();
+  }
+  return '';
+}
+
+/** 案件概要 */
+function buildProjectSummaryFast_(row, idxMap) {
+  const estimateNo = getByIndex_(row, idxMap[WEBVIEW.KEY_HEADER]);
+  const customer = getByIndex_(row, idxMap['顧客名']);
+  const summary = getByIndex_(row, idxMap['案件概要']) || getByIndex_(row, idxMap['案件名']);
+  const quoteUrl = getByIndex_(row, idxMap['見積']);
+
+  const line1Text = [estimateNo ? `【${estimateNo}】` : '', customer].filter(Boolean).join('');
+
+  const line1Html = quoteUrl
+    ? `<a class="case-summary-link" href="${escapeAttr_(quoteUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml_(line1Text)}</a>`
+    : `<span>${escapeHtml_(line1Text)}</span>`;
+
+  return [
+    '<div class="case-summary-wrap">',
+    line1Text ? `<div class="case-summary-head">${line1Html}</div>` : '',
+    summary ? `<div class="case-summary-body">${escapeHtml_(summary)}</div>` : '',
+    '</div>'
+  ].join('');
+}
+
+function escapeAttr_(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/** 案件情報 */
+function buildCaseInfoFast_(row, idxMap) {
+  const workContent = getByIndex_(row, idxMap['作業内容']);
+  const workStyle = getByIndex_(row, idxMap['作業形態']);
+  const workPlace = cleanPlaceText_(getByIndex_(row, idxMap['現地作業場所']));
+  const nearest = getByIndex_(row, idxMap['最寄り']);
+  const inspectYm = formatInspectYm_(row[idxMap['検収予定']]);
+
+  const placeLine2 = workPlace
+    ? (nearest ? `${workPlace}(${nearest})` : workPlace)
+    : (nearest ? `(${nearest})` : '');
+
+  const lines = [];
+
+  lines.push(
+    `<div class="info-line">
+      <span class="info-tag">作業内容</span>
+      <span class="info-value">${escapeHtml_(workContent || '')}</span>
+    </div>`
+  );
+
+  lines.push(
+    `<div class="info-line">
+      <span class="info-tag">作業場所</span>
+      <span class="info-value">${escapeHtml_(workStyle || '')}</span>
+    </div>`
+  );
+
+  if (placeLine2) {
+    lines.push(
+      `<div class="info-line info-line-sub">
+        <span class="info-tag info-tag-sub">場所</span>
+        <span class="info-value">${escapeHtml_(placeLine2)}</span>
+      </div>`
+    );
+  }
+
+  lines.push(
+    `<div class="info-line">
+      <span class="info-tag">検収予定</span>
+      <span class="info-value">${escapeHtml_(inspectYm || '')}</span>
+    </div>`
+  );
+
+  return `<div class="case-info-wrap">${lines.join('')}</div>`;
 }
 
 /** 担当SE */
 function buildTantoSeFast_(row, idxMap) {
-  const lines = [];
-
   const sup = getByIndex_(row, idxMap['監督者']);
   const mgr = getByIndex_(row, idxMap['管理者']);
   const sub = getByIndex_(row, idxMap['サポート']);
 
-  if (isValidMemberText_(sup)) lines.push(`監督者：${sup}`);
-  if (isValidMemberText_(mgr)) lines.push(`管理者：${mgr}`);
-  if (isValidMemberText_(sub)) lines.push(`サポート：${sub}`);
+  const lines = [];
 
-  return lines.join('\n');
+  if (isValidMemberText_(sup)) {
+    lines.push(
+      `<div class="info-line">
+        <span class="info-tag se-tag">監督者</span>
+        <span class="info-value">${escapeHtml_(sup)}</span>
+      </div>`
+    );
+  }
+
+  if (isValidMemberText_(mgr)) {
+    lines.push(
+      `<div class="info-line">
+        <span class="info-tag se-tag">管理者</span>
+        <span class="info-value">${escapeHtml_(mgr)}</span>
+      </div>`
+    );
+  }
+
+  if (isValidMemberText_(sub)) {
+    lines.push(
+      `<div class="info-line">
+        <span class="info-tag se-tag">サポート</span>
+        <span class="info-value">${escapeHtml_(sub)}</span>
+      </div>`
+    );
+  }
+
+  return `<div class="case-se-wrap">${lines.join('')}</div>`;
 }
 
 function isValidMemberText_(v) {
@@ -202,60 +367,60 @@ function buildWorkPeriodHtmlFast_(caseRow, idxMap, statusRow, statusHeaderMap, t
   const outBig = (String(type || '').toUpperCase() === 'CL') ? '現地作業' : '現地・リモート作業';
 
   const pCaseStart = getStatusPeriodValue_(statusRow, statusHeaderMap, caseBig, '作業期間：開始');
-  const pCaseEnd   = getStatusPeriodValue_(statusRow, statusHeaderMap, caseBig, '作業期間：終了');
-  const pInStart   = getStatusPeriodValue_(statusRow, statusHeaderMap, inBig, '作業期間：開始');
-  const pInEnd     = getStatusPeriodValue_(statusRow, statusHeaderMap, inBig, '作業期間：終了');
-  const pOutStart  = getStatusPeriodValue_(statusRow, statusHeaderMap, outBig, '作業期間：開始');
-  const pOutEnd    = getStatusPeriodValue_(statusRow, statusHeaderMap, outBig, '作業期間：終了');
+  const pCaseEnd = getStatusPeriodValue_(statusRow, statusHeaderMap, caseBig, '作業期間：終了');
+  const pInStart = getStatusPeriodValue_(statusRow, statusHeaderMap, inBig, '作業期間：開始');
+  const pInEnd = getStatusPeriodValue_(statusRow, statusHeaderMap, inBig, '作業期間：終了');
+  const pOutStart = getStatusPeriodValue_(statusRow, statusHeaderMap, outBig, '作業期間：開始');
+  const pOutEnd = getStatusPeriodValue_(statusRow, statusHeaderMap, outBig, '作業期間：終了');
 
   const info = buildWorkPeriodInfo_(pCaseEnd, caseStatus);
 
   if (!pCaseStart || !pCaseEnd || pCaseStart > pCaseEnd) {
     return [
       '<div class="wp-wrap">',
-        '<div class="wp-row">',
-          '<div class="wp-label">案件期間</div>',
-          '<div class="wp-lane"><div class="wp-none">未設定</div></div>',
-        '</div>',
-        '<div class="wp-row">',
-          '<div class="wp-label">社内期間</div>',
-          '<div class="wp-lane"><div class="wp-none">-</div></div>',
-        '</div>',
-        '<div class="wp-row">',
-          '<div class="wp-label">社外期間</div>',
-          '<div class="wp-lane"><div class="wp-none">-</div></div>',
-        '</div>',
-        '<div class="wp-info ' + (info.cls || '') + '">' + escapeHtml_(info.text || '完了予定未設定') + '</div>',
+      '<div class="wp-row">',
+      '<div class="wp-label">案件</div>',
+      '<div class="wp-lane"><div class="wp-none">未設定</div></div>',
+      '</div>',
+      '<div class="wp-row">',
+      '<div class="wp-label">社内</div>',
+      '<div class="wp-lane"><div class="wp-none">-</div></div>',
+      '</div>',
+      '<div class="wp-row">',
+      '<div class="wp-label">社外</div>',
+      '<div class="wp-lane"><div class="wp-none">-</div></div>',
+      '</div>',
+      '<div class="wp-info ' + (info.cls || '') + '">' + escapeHtml_(info.text || '完了予定未設定') + '</div>',
       '</div>'
     ].join('');
   }
 
   const caseBar = buildFullBarHtml_(pCaseStart, pCaseEnd, 'case');
-  const inBar   = buildGanttBarHtml_(pCaseStart, pCaseEnd, pInStart, pInEnd, 'in');
-  const outBar  = buildGanttBarHtml_(pCaseStart, pCaseEnd, pOutStart, pOutEnd, 'out');
+  const inBar = buildGanttBarHtml_(pCaseStart, pCaseEnd, pInStart, pInEnd, 'in');
+  const outBar = buildGanttBarHtml_(pCaseStart, pCaseEnd, pOutStart, pOutEnd, 'out');
 
   return [
     '<div class="wp-wrap">',
-      '<div class="wp-row">',
-        '<div class="wp-label">案件期間</div>',
-        '<div class="wp-lane wp-lane-case">' + caseBar + '</div>',
-      '</div>',
-      '<div class="wp-row">',
-        '<div class="wp-label">社内期間</div>',
-        '<div class="wp-lane">' + inBar + '</div>',
-      '</div>',
-      '<div class="wp-row">',
-        '<div class="wp-label">社外期間</div>',
-        '<div class="wp-lane">' + outBar + '</div>',
-      '</div>',
-      '<div class="wp-info ' + (info.cls || '') + '">' + escapeHtml_(info.text || '') + '</div>',
+    '<div class="wp-row">',
+    '<div class="wp-label">案件期間</div>',
+    '<div class="wp-lane wp-lane-case">' + caseBar + '</div>',
+    '</div>',
+    '<div class="wp-row">',
+    '<div class="wp-label">社内期間</div>',
+    '<div class="wp-lane">' + inBar + '</div>',
+    '</div>',
+    '<div class="wp-row">',
+    '<div class="wp-label">社外期間</div>',
+    '<div class="wp-lane">' + outBar + '</div>',
+    '</div>',
+    '<div class="wp-info ' + (info.cls || '') + '">' + escapeHtml_(info.text || '') + '</div>',
     '</div>'
   ].join('');
 }
 
 /** 作業概要 */
 function buildWorkSummaryFast_(row, idxMap) {
-  const work  = getByIndex_(row, idxMap['作業内容']);
+  const work = getByIndex_(row, idxMap['作業内容']);
   const style = getByIndex_(row, idxMap['作業形態']);
   const place = cleanPlaceText_(getByIndex_(row, idxMap['現地作業場所']));
 
@@ -399,7 +564,7 @@ function buildGanttBarHtml_(baseStart, baseEnd, start, end, kind) {
   if (total < 1) total = 1;
 
   const offset = diffDaysInclusive_(baseStart, s) - 1;
-  const span   = diffDaysInclusive_(s, e);
+  const span = diffDaysInclusive_(s, e);
 
   let left = (offset / total) * 100;
   let width = (span / total) * 100;
@@ -416,7 +581,7 @@ function buildGanttBarHtml_(baseStart, baseEnd, start, end, kind) {
 
   return [
     '<div class="wp-bar wp-bar-' + kind + (isTiny ? ' is-tiny' : '') + '" style="left:' + left + '%;width:' + width + '%;">',
-      '<span class="wp-bar-text">' + escapeHtml_(label) + '</span>',
+    '<span class="wp-bar-text">' + escapeHtml_(label) + '</span>',
     '</div>'
   ].join('');
 }
@@ -430,7 +595,7 @@ function buildFullBarHtml_(start, end, kind) {
 
   return [
     '<div class="wp-bar wp-bar-' + kind + '" style="left:0%;width:100%;">',
-      '<span class="wp-bar-text">' + escapeHtml_(label) + '</span>',
+    '<span class="wp-bar-text">' + escapeHtml_(label) + '</span>',
     '</div>'
   ].join('');
 }

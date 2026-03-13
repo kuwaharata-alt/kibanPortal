@@ -1,492 +1,531 @@
 <style>
-  /* ===== Panels ===== */
-  .panel {
-    display: none;
+  /* =========================================================
+   * Panel
+   * ======================================================= */
+  .panel{
+    display:none;
+  }
+  .panel.active{
+    display:block;
   }
 
-  .panel.active {
-    display: block;
+  /* =========================================================
+   * Common small UI
+   * ======================================================= */
+  .warn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:2px 8px;
+    border-radius:999px;
+    background:rgba(185,28,28,.08);
+    color:var(--err);
+    border:1px solid rgba(185,28,28,.18);
+    font-weight:700;
+    white-space:nowrap;
   }
-
-  th.col-act,
-  td.col-act {
-    width: 1%;
-    white-space: nowrap;
-  }
-
-  /* 作業期間の注意表示 */
-  .warn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: rgba(185, 28, 28, .08);
-    color: var(--err);
-    border: 1px solid rgba(185, 28, 28, .18);
-    font-weight: 700;
-    white-space: nowrap;
-  }
-
-  .warn .ico {
-    font-size: 13px;
-    line-height: 1;
-  }
-
-  /* ===== タグ ===== */
-  .tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .tag {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1.4;
-    white-space: nowrap;
-    background: #f3f4f6;
-    color: #374151;
-    border: 1px solid rgba(0, 0, 0, .08);
-  }
-
-  /* カテゴリ別色（必要に応じて追加） */
-  .tag.ad {
-    background: #eef2ff;
-    color: #3730a3;
-    border-color: #c7d2fe;
-  }
-
-  .tag.fs {
-    background: #ecfeff;
-    color: #155e75;
-    border-color: #67e8f9;
-  }
-
-  .tag.mail {
-    background: #f0fdf4;
-    color: #166534;
-    border-color: #86efac;
-  }
-
-  .tag.pc {
-    background: #fff7ed;
-    color: #9a3412;
-    border-color: #fed7aa;
-  }
-
-
-  /* ステータス表示（一覧用） */
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 12px;
-    line-height: 1;
-    border: 1px solid transparent;
-    white-space: nowrap;
-  }
-
-  .status-line {
-    margin: 4px 0;
-    /* ← 2px → 4px に */
-  }
-
-  .status-cell {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-
-  /* 未着手：薄い黄色＋オレンジ */
-  .status-todo {
-    background: #FFF6D6;
-    /* 薄い黄色 */
-    color: #B45309;
-    /* オレンジ寄り */
-    border-color: #FCD34D;
-    /* うすめの黄 */
-  }
-
-  /* 対応中：水色＋青字 */
-  .status-doing {
-    background: #1D4ED8;
-    /* 少し濃い水色 */
-    color: #FFFFFF;
-    /* 少し濃い青 */
-    border: 1px solid #3B82F6;
-    font-weight: 800;
-    /* 少し強め */
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
-    /* うっすら強調 */
-  }
-
-  /* 完了：薄いグレー＋黒 */
-  .status-done {
-    background: #F3F4F6;
-    /* 薄いグレー */
-    color: #111827;
-    /* 黒（濃いめ） */
-    border-color: #D1D5DB;
-  }
-
-  /* アサイン未：赤 */
-  .status-assing {
-    background: #FFC7CE;
-    color: #9C0006;
-    border-color: #9C0006;
-
-  }
-
-  /* 事前確認中： */
-  .status-ad-con {
-    background: #DBEAFE;
-    /* 少し濃い水色 */
-    color: #1D4ED8;
-    /* 少し濃い青 */
-    border: 1px solid #3B82F6;
-    font-weight: 800;
-    /* 少し強め */
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
-    /* うっすら強調 */
-  }
-
-  /* 作業中：青 */
-  .status-doingH {
-    background: #E2EFDA;
-    color: #548235;
-    border: 1px solid #375623;
-    font-weight: 800;
-    /* 少し強め */
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.15);
-    /* うっすら強調 */
-  }
-
-
-  /* 対応無：グレー（任意） */
-  .status-na {
-    background: #F9FAFB;
-    color: #6B7280;
-    border-color: #E5E7EB;
-  }
-
-  .dd {
-    position: relative;
-    display: inline-block;
-  }
-
-  .dd-btn {
-    min-width: 140px;
-    height: 32px;
-    padding: 0 10px;
-    border: 1px solid var(--line);
-    background: #fff;
-    border-radius: 8px;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .dd-menu {
-    position: absolute;
-    top: 36px;
-    left: 0;
-    z-index: 999;
-    min-width: 240px;
-    max-height: 280px;
-    overflow: auto;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    box-shadow: 0 12px 30px rgba(0, 0, 0, .10);
-    padding: 8px;
-    display: none;
-  }
-
-  .dd.is-open .dd-menu {
-    display: block;
-  }
-
-  .dd-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 6px;
-    border-radius: 8px;
-  }
-
-  .dd-item:hover {
-    background: rgba(0, 0, 0, .04);
-  }
-
-  #memberSelected {
-    color: var(--sub);
-    white-space: nowrap;
-  }
-
-  .bar-split {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .bar-left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 320px;
-  }
-
-  .bar-right {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    justify-content: flex-end;
-    flex: 1;
-  }
-
-  /* 右側の検索ボックスは伸ばして、最大幅も制限 */
-  .bar-right #q {
-    flex: 1;
-    max-width: 520px;
-    min-width: 260px;
-  }
-
-  /* 2行レイアウト */
-  .status-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .status-row {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    align-items: center;
-  }
-
-  /* ステータス：メイン/サブの2段 */
-  .status-wrap2{
-    display:flex;
-    flex-direction:column;
+  .warn .ico{
+    font-size:13px;
     line-height:1;
-    gap:2px;
   }
 
-  /* 案件STをメインとして大きく */
-  .status-pill-main{
-    font-size:14px;
-    font-weight:500;
-    padding:4px 8px;
+  /* =========================================================
+   * Filter / toolbar
+   * ======================================================= */
+  .dd{
+    position:relative;
+    display:inline-block;
+  }
+  .dd-btn{
+    min-width:140px;
+    height:32px;
+    padding:0 10px;
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:8px;
+    text-align:left;
+    cursor:pointer;
+  }
+  .dd-menu{
+    position:absolute;
+    top:36px;
+    left:0;
+    z-index:999;
+    min-width:240px;
+    max-height:280px;
+    overflow:auto;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:10px;
+    box-shadow:0 12px 30px rgba(0,0,0,.10);
+    padding:8px;
+    display:none;
+  }
+  .dd.is-open .dd-menu{
+    display:block;
+  }
+  .dd-item{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:6px 6px;
+    border-radius:8px;
+  }
+  .dd-item:hover{
+    background:rgba(0,0,0,.04);
+  }
+  #memberSelected{
+    color:var(--sub);
+    white-space:nowrap;
   }
 
-  /* サブ（内/外/Doc） */
-  .status-sub{
+  .bar-split{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .bar-left{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-width:320px;
+  }
+  .bar-right{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    justify-content:flex-end;
+    flex:1;
+  }
+  .bar-right #q{
+    flex:1;
+    max-width:520px;
+    min-width:260px;
+  }
+
+  /* =========================================================
+   * Table common
+   * ======================================================= */
+  th.col-act,
+  td.col-act{
+    width:1%;
+    white-space:normal;
+  }
+
+  td.col-act{
+    vertical-align: middle;
+    text-align: center;
+  }
+
+
+  td.col-act button + button{
+    margin-top:8px;
+  }
+
+  /* =========================================================
+   * Tags
+   * ======================================================= */
+  .tags{
     display:flex;
     flex-wrap:wrap;
     gap:6px;
   }
+  .tag{
+    display:inline-flex;
+    align-items:center;
+    padding:2px 8px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:700;
+    line-height:1.4;
+    white-space:nowrap;
+    background:#f3f4f6;
+    color:#374151;
+    border:1px solid rgba(0,0,0,.08);
+  }
+  .tag.ad{
+    background:#eef2ff;
+    color:#3730a3;
+    border-color:#c7d2fe;
+  }
+  .tag.fs{
+    background:#ecfeff;
+    color:#155e75;
+    border-color:#67e8f9;
+  }
+  .tag.mail{
+    background:#f0fdf4;
+    color:#166534;
+    border-color:#86efac;
+  }
+  .tag.pc{
+    background:#fff7ed;
+    color:#9a3412;
+    border-color:#fed7aa;
+  }
 
-  /* サブのチップを小さく */
+  /* =========================================================
+   * Status cell
+   * ======================================================= */
+  .status-cell{
+    padding-top:6px;
+    padding-bottom:6px;
+  }
+
+  .status-wrap2{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    line-height:1;
+  }
+  .status-main{
+    display:flex;
+    justify-content:center;
+  }
+  .status-sub{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .status-pill-row{
+    display:inline-flex;
+    align-items:center;
+    margin:0;
+  }
+
+  .status-pill{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:4px 10px;
+    border-radius:999px;
+    font-weight:700;
+    font-size:12px;
+    line-height:1;
+    border:1px solid transparent;
+    white-space:nowrap;
+  }
+  .status-pill-main{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    white-space:nowrap;
+    font-size:14px;
+    font-weight:500;
+    padding:4px 8px;
+  }
   .status-pill-mini{
+    display:inline-flex;
+    align-items:center;
+    white-space:nowrap;
     font-size:11px;
     padding:2px 8px;
     border-radius:12px;
   }
 
+  .status-line{
+    margin:4px 0;
+  }
+
+  /* --- summary status colors --- */
+  .status-todo{
+    background:#FFF6D6;
+    color:#B45309;
+    border-color:#FCD34D;
+  }
+  .status-doing{
+    background:#1D4ED8;
+    color:#FFFFFF;
+    border-color:#3B82F6;
+    font-weight:800;
+    box-shadow:0 0 0 1px rgba(59,130,246,.15);
+  }
+  .status-done{
+    background:#F3F4F6;
+    color:#111827;
+    border-color:#D1D5DB;
+  }
+  .status-na{
+    background:#F9FAFB;
+    color:#6B7280;
+    border-color:#E5E7EB;
+  }
+
+  /* --- case status colors --- */
+  .status-assign{
+    background:#FFE4E6;
+    color:#B91C1C;
+    border-color:#FCA5A5;
+  }
+  .status-assign-progress{
+    background:#DBEAFE;
+    color:#1D4ED8;
+    border-color:#3B82F6;
+  }
+  .status-precheck{
+    background:#E0F2FE;
+    color:#0369A1;
+    border-color:#7DD3FC;
+  }
+  .status-work{
+    background:#E2EFDA;
+    color:#375623;
+    border-color:#548235;
+  }
+  .status-doc{
+    background:#F3E8FF;
+    color:#6B21A8;
+    border-color:#C084FC;
+  }
+  .status-close-pre{
+    background:#FEF3C7;
+    color:#92400E;
+    border-color:#FCD34D;
+  }
+
+  /* =========================================================
+   * Notes / remarks
+   * ======================================================= */
   .noteCards{
-  display:flex;
-  flex-direction:column;
-  gap:6px;
-}
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .noteCard{
+    background:#fff;
+    border:1px solid #d1d5db;
+    border-radius:10px;
+    padding:8px 10px;
+    display:flex;
+    gap:10px;
+    align-items:stretch;
+  }
+  .noteVTitle{
+    width:26px;
+    border-right:1px dashed #e5e7eb;
+    padding-right:8px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    writing-mode:vertical-rl;
+    text-orientation:upright;
+    font-weight:700;
+    font-size:12px;
+    color:#111;
+    letter-spacing:1px;
+  }
+  .noteBody{
+    flex:1;
+    font-size:12px;
+    color:#111;
+    line-height:1.45;
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
 
-/* コメント用 */
-.noteCard{
-  background:#fff;
-  border:1px solid #d1d5db;
-  border-radius:10px;
-  padding:8px 10px;
-}
-.noteCard .noteTitle{
-  font-size:12px;
-  font-weight:700;
-  color:#111;
-  margin-bottom:4px;
-}
-.noteCard .noteBody{
-  font-size:12px;
-  color:#111;
-  line-height:1.45;
-  white-space:pre-wrap; /* 改行残す */
-  word-break:break-word;
-}
+  /* =========================================================
+   * Work summary
+   * ======================================================= */
+  .work-summary-cell{
+    white-space:pre-line;
+    line-height:1.35;
+  }
+  .work-summary-cell .sub{
+    color:#6b7280;
+    font-size:12px;
+  }
 
-.noteCards{ display:flex; flex-direction:column; gap:6px; }
+  /* =========================================================
+   * Work period
+   * ======================================================= */
+  .td-work-period{
+    min-width:300px;
+  }
 
-.noteCard{
-  background:#fff;
-  border:1px solid #d1d5db;
-  border-radius:10px;
-  padding:8px 10px;
+  .wp-wrap{
+    min-width:280px;
+    white-space:normal;
+    line-height:1.35;
+  }
+  .wp-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:6px;
+  }
+  .wp-label{
+    width:52px;
+    flex:0 0 52px;
+    font-size:11px;
+    font-weight:700;
+    color:#4b5563;
+  }
+  .wp-lane{
+    position:relative;
+    height:18px;
+    flex:1 1 auto;
+    background:#eef2f7;
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .wp-lane-case{
+    background:#e5e7eb;
+  }
+  .wp-bar{
+    position:absolute;
+    top:1px;
+    height:16px;
+    border-radius:999px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 6px;
+    box-sizing:border-box;
+    overflow:visible;
+  }
+  .wp-bar-text{
+    display:block;
+    font-size:10px;
+    font-weight:700;
+    color:#fff;
+    white-space:nowrap;
+    line-height:1;
+  }
+  .wp-bar.is-tiny .wp-bar-text{
+    position:absolute;
+    left:100%;
+    margin-left:4px;
+    color:#374151;
+  }
+  .wp-bar-case{
+    background:linear-gradient(90deg,#9ca3af,#6b7280);
+  }
+  .wp-bar-in{
+    background:#60a5fa;
+  }
+  .wp-bar-out{
+    background:#34d399;
+  }
+  .wp-none{
+    font-size:11px;
+    color:#9ca3af;
+    padding-left:8px;
+    line-height:18px;
+  }
+  .wp-info{
+    margin-top:8px;
+    font-size:11px;
+    font-weight:700;
+    color:#b45309;
+  }
+  .wp-info.is-overdue{
+    color:#dc2626;
+  }
+  .wp-info.is-today,
+  .wp-info.is-future{
+    color:#b45309;
+  }
 
-  display:flex;
-  gap:10px;
-  align-items:stretch;
-}
+  /* =========================================================
+   * Case summary
+   * ======================================================= */
+  .td-case-summary{
+    vertical-align:middle;
+  }
+  .case-summary-wrap{
+    line-height:1.45;
+  }
+  .case-summary-head{
+    font-size:15px;
+    font-weight:700;
+    margin-bottom:4px;
+    color:#1f2937;
+  }
+  .case-summary-body{
+    font-size:12px;
+    line-height:1.45;
+    color:#334155;
+    white-space:normal;
+    word-break:break-word;
+  }
 
-/* 左の縦書きラベル */
-.noteVTitle{
-  width:26px;
-  border-right:1px dashed #e5e7eb;
-  padding-right:8px;
+  /* =========================================================
+   * Case info / member
+   * ======================================================= */
+  .td-case-info{
+    white-space:normal;
+    line-height:1.5;
+  }
 
-  display:flex;
-  justify-content:center;
-  align-items:center;
+  .case-info-wrap,
+  .case-se-wrap{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    line-height:1.4;
+  }
+  .info-line{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+  }
+  .info-line-sub{
+    margin-top:-2px;
+  }
+  .info-tag{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:40px;
+    padding:2px 8px;
+    border-radius:999px;
+    background:#E8F0FE;
+    color:#1D4ED8;
+    border:1px solid #BFDBFE;
+    font-size:11px;
+    font-weight:700;
+    line-height:1.2;
+    white-space:nowrap;
+    flex:0 0 auto;
+  }
+  .info-tag-sub{
+    background:#F3F4F6;
+    color:#6B7280;
+    border-color:#E5E7EB;
+  }
+  .se-tag{
+    background:#ECFDF5;
+    color:#047857;
+    border-color:#A7F3D0;
+  }
+  .info-value{
+    display:block;
+    color:#111827;
+    font-size:12px;
+    line-height:1.45;
+    word-break:break-word;
+  }
 
-  writing-mode: vertical-rl;      /* 縦書き */
-  text-orientation: upright;      /* 文字を立てる */
-  font-weight:700;
-  font-size:12px;
-  color:#111;
-  letter-spacing:1px;
-}
+  .case-summary-link{
+    color:#1f2937;
+    text-decoration:none;
+  }
 
-/* 右の本文 */
-.noteBody{
-  flex:1;
-  font-size:12px;
-  color:#111;
-  line-height:1.45;
-  white-space:pre-wrap;
-  word-break:break-word;
-}
+  .case-summary-link:hover{
+    color:#1d4ed8;
+    text-decoration:underline;
+  }
 
-.work-summary-cell {
-  white-space: pre-line;
-  line-height: 1.35;
-}
-.work-summary-cell .sub {
-  color: #6b7280;
-  font-size: 12px;
-}
+  .status-cell{
+    min-width:140px;
+  }
 
-.td-work-period{
-  min-width: 300px;
-}
+  .status-pill-main{
+    min-width:120px;
+    justify-content:center;
+  }
 
-.wp-wrap{
-  min-width: 280px;
-  white-space: normal;
-  line-height: 1.35;
-}
-
-.wp-row{
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.wp-label{
-  width: 52px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #4b5563;
-  flex: 0 0 52px;
-}
-
-.wp-lane{
-  position: relative;
-  height: 18px;
-  flex: 1 1 auto;
-  background: #eef2f7;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.wp-lane-case{
-  background: #e5e7eb;
-}
-
-.wp-bar{
-  position: absolute;
-  top: 1px;
-  height: 16px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  box-sizing: border-box;
-  overflow: visible;
-}
-
-.wp-bar-text{
-  display: block;
-  font-size: 10px;
-  font-weight: 700;
-  color: #ffffff;
-  white-space: nowrap;
-  line-height: 1;
-}
-
-.wp-bar.is-tiny .wp-bar-text{
-  position: absolute;
-  left: 100%;
-  margin-left: 4px;
-  color: #374151;
-}
-
-.wp-info{
-  margin-top: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #b45309;
-}
-
-.wp-info.is-overdue{
-  color: #dc2626;
-}
-
-.wp-info.is-today{
-  color: #b45309;
-}
-
-.wp-info.is-future{
-  color: #b45309;
-}
-
-.wp-bar-case{
-  background: linear-gradient(90deg, #9ca3af, #6b7280);
-}
-
-.wp-bar-in{
-  background: #60a5fa;
-}
-
-.wp-bar-out{
-  background: #34d399;
-}
-
-.wp-none{
-  font-size: 11px;
-  color: #9ca3af;
-  padding-left: 8px;
-  line-height: 18px;
-}
-
-.wp-info{
-  margin-top: 8px;
-  font-size: 11px;
-  font-weight: 700;
-  color: #b45309;
-}
 </style>

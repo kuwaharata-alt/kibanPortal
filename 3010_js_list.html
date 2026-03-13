@@ -9,6 +9,7 @@ async function loadCases_(){
   const pageSizeEl   = document.getElementById('pageSize');
   const qEl          = document.getElementById('q');
   const hideClosedEl = document.getElementById('hideClosed');
+  const inspectMonth = document.getElementById('inspectMonth')?.value || '';
 
   st.pageSize = Number(pageSizeEl?.value || '200');
   const q = qEl?.value || '';
@@ -53,7 +54,15 @@ async function loadCases_(){
         })
         .withFailureHandler(err => { setErr('api_list failure: ' + String(err)); setMeta(''); })
         // ★ ここだけ呼ぶ：api_list に members を渡す
-        .api_list({ type: st.type, q, hideClosed, page: st.page, pageSize: st.pageSize, members });
+        .api_list({ 
+          type: st.type, 
+          q,
+          hideClosed,
+          page: st.page,
+          pageSize: st.pageSize,
+          members,
+          inspectMonth
+        });
     })
     .withFailureHandler(err => { setErr('api_ping failure: ' + String(err)); setMeta(''); })
     .api_ping();
@@ -87,18 +96,18 @@ function renderCases_(rebuildHeader){
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const idxKey = st.headerIndex[st.keyHeader];
-  const idxCustomer = st.headerIndex[st.customerHeader];
   const idxBiko = st.headerIndex[st.statusNote];
 
-  for (const row of st.rows) {
+  for (const item of st.rows) {
     const tr = document.createElement('tr');
+
+    const row = Array.isArray(item) ? item : (item.cells || []);
 
     const tdAct = document.createElement('td');
     tdAct.classList.add('col-act');
 
-    const key = String(row[idxKey] ?? '').trim();
-    const customer = String(row[idxCustomer] ?? '').trim();
+    const key = String(item?.key ?? '').trim();
+    const customer = String(item?.customer ?? '').trim();
 
     // 操作
     const btnView = document.createElement('button');
@@ -124,6 +133,27 @@ function renderCases_(rebuildHeader){
         tr.appendChild(td);
         continue;
       }
+      
+      if (header === '案件概要') {
+        td.innerHTML = v || '';
+        td.classList.add('td-case-summary');
+        tr.appendChild(td);
+        continue;
+      }
+
+      if (header === '案件情報') {
+        td.innerHTML = v || '';
+        td.classList.add('td-case-info');
+        tr.appendChild(td);
+        continue;
+      }
+
+      if (header === '担当SE') {
+        td.innerHTML = v || '';
+        td.classList.add('td-case-se');
+        tr.appendChild(td);
+        continue;
+      }
 
       if (header === '作業期間') {
         td.innerHTML = v || '';
@@ -132,12 +162,11 @@ function renderCases_(rebuildHeader){
         continue;
       }
 
-
       if (header === '備考') {
         const note = (idxBiko == null) ? '' : (row[idxBiko] == null ? '' : String(row[idxBiko]));
         const html = noteToCardsHtml_(note);
 
-        td.innerHTML = html || escapeHtml(note).replaceAll('\n','<br>');
+        td.innerHTML = html || escapeHtml_(note).replace(/\n/g,'<br>');
         td.style.whiteSpace = 'normal';
         tr.appendChild(td);
         continue;
@@ -196,21 +225,23 @@ function switchStatusTab(tab){
 
 function normalizeSummaryState_(s){
   s = String(s || '')
-    .replace(/\u3000/g, ' ')           // 全角スペース
-    .replace(/[✔️⏸️🔅❌]/g, '')        // アイコン除去
-    .replace(/[()（）]/g, '')          // 括弧（雑に）
-    .replace(/対応有|固定/g, '')       // UIラベル除去
+    .replace(/\u3000/g,' ')
+    .replace(/[✔️⏸️🔅❌]/g,'')
     .trim();
 
-  if (!s) return '未着手';
-  if (s === 'ー' || s === '-' || s === '—') return 'ー';
-  if (s.includes('対応無')) return 'ー';
-  if (s.includes('完了')) return '完了';
-  if (s.includes('未着手')) return '未着手';
-  if (s.includes('未入荷')) return '未着手';
+  if(!s) return '未着手';
 
-  // それ以外は対応中
-  return '対応中';
+  if(s === 'ー' || s === '-' || s === '—') return 'ー';
+
+  if(s.includes('対応無')) return 'ー';
+
+  if(s.includes('完了')) return '完了';
+
+  if(s.includes('未着手') || s.includes('未入荷')) return '未着手';
+
+  if(s.includes('対応中') || s.includes('作業中')) return '対応中';
+
+  return '未着手';   // ★ここが重要
 }
 
 /** ===== ステータス文字列をパースしてMap化 =====
@@ -220,14 +251,23 @@ function normalizeSummaryState_(s){
 
 
 /** ===== 案件ST用の色分け（要件の3種を想定） ===== */
-
 function caseStToClass_(caseSt){
   const t = String(caseSt || '');
-  if(t.includes('アサイン中')) return 'status-pill status-assing';
-  if(t.includes('事前確認中')) return 'status-pill status-ad-con';
-  if(t.includes('作業対応中')) return 'status-pill status-doingH';
-  if(t.includes('CLOSE'))   return 'status-pill status-done';
-  return 'status-pill';
+
+  if(t.includes('未アサイン')) return 'status-pill status-assign';
+  if(t.includes('アサイン中')) return 'status-pill status-assign';
+
+  if(t.includes('詳細確認')) return 'status-pill status-precheck';
+
+  if(t.includes('作業中')) return 'status-pill status-work';
+
+  if(t.includes('ﾄﾞｷｭﾒﾝﾄ')) return 'status-pill status-doc';
+
+  if(t.includes('ｸﾛｰｽﾞ前')) return 'status-pill status-close-pre';
+
+  if(t.includes('CLOSE')) return 'status-pill status-done';
+
+  return 'status-pill status-todo';
 }
 
 function stateToClass_(state){
@@ -380,36 +420,45 @@ function docStateFromRow_(row, headerIndex){
 
 
 function renderStatusCellHtml2Lines_(v){
-  const lines = String(v || '').split('\n').map(s=>s.trim()).filter(Boolean);
-  if(!lines.length) return '';
+  const text = String(v || '').trim();
+  if(!text) return '';
 
-  // 1行目：案件ST：xxx
-  const line1 = lines[0] || '';
-  const clsCase = caseStToClass_(line1);
+  const mCase = text.match(/案件ST：([^\n]+)/);
+  const caseSt = mCase ? mCase[1].trim() : '';
 
-  // 2行目～：社内：xxx 現地：xxx Doc.：xxx
-  const subLines = lines.slice(1).map(s => String(s || '').trim()).filter(Boolean);
+  const clsCase = caseStToClass_(caseSt);
 
-  const chipsSub = subLines.map(p => {
-    const m = p.match(/^(.*?：)(.+)$/);
-    if (!m) {
-      return `<div class="status-pill-row"><span class="status-pill status-pill-mini">${escapeHtml(p)}</span></div>`;
-    }
+  const subs = [];
 
-    const label = m[1];
-    const raw   = m[2];
+  const mIn = text.match(/社内：([^\s　]+)/);
+  if(mIn) subs.push({label:'社内：', state:mIn[1]});
 
-    const st  = normalizeSummaryState_(raw);
+  const mOut = text.match(/現地：([^\s　]+)/);
+  if(mOut) subs.push({label:'現地：', state:mOut[1]});
+
+  const mDoc = text.match(/Doc\.：([^\s　]+)/);
+  if(mDoc) subs.push({label:'ﾄﾞｷｭﾒﾝﾄ：', state:mDoc[1]});
+
+  const chipsSub = subs.map(p=>{
+    const st  = normalizeSummaryState_(p.state);
     const cls = stateToClass_(st);
     const ico = iconOnlyFromState_(st);
 
-    return `<div class="status-pill-row"><span class="${cls} status-pill-mini">${escapeHtml(label)}${ico}</span></div>`;
+    return `
+      <div class="status-pill-row">
+        <span class="${cls} status-pill-mini">
+          ${escapeHtml_(p.label)}${ico}
+        </span>
+      </div>
+    `;
   }).join('');
 
   return `
     <div class="status-wrap2">
       <div class="status-main">
-        <span class="${clsCase} status-pill-main">${escapeHtml(line1)}</span>
+        <span class="${clsCase} status-pill-main">
+          ${escapeHtml_(caseSt)}
+        </span>
       </div>
       <div class="status-sub">
         ${chipsSub}
@@ -419,9 +468,9 @@ function renderStatusCellHtml2Lines_(v){
 }
 
 function iconOnlyFromState_(state){
-  if(state === '完了') return '✔️';
   if(state === '未着手') return '⏸️';
   if(state === '対応中') return '🔅';
+  if(state === '完了') return '✔️';
   if(state === 'ー') return '❌';
   return '•';
 }
@@ -472,8 +521,6 @@ function noteTitleAlias_(t){
 function noteVLabel_(title){
   const t = String(title || '').trim();
 
-  // 案件確認は一覧では「案件」扱い
-  if(t === '案件確認' || t === '案件') return '案件';
   if(t === '社内作業') return '社内';
   if(t === '現地作業') return '社外';
   if(t === '現地・リモート作業') return '社外';
@@ -509,6 +556,25 @@ function escapeHtml_(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+function loadInspectMonths(){
+
+  google.script.run
+    .withSuccessHandler(list => {
+
+      const sel = document.getElementById('inspectMonth');
+
+      list.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        sel.appendChild(opt);
+      });
+
+    })
+    .api_getInspectMonths();
+}
+
 window.renderCases_ = renderCases_;
 window.buildHeader_ = buildHeader_;
 </script>

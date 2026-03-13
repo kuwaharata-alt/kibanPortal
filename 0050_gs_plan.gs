@@ -83,7 +83,6 @@ function api_getPlanMaster() {
  *   個人シートの月次取得
  *  ====================================================================== */
 
-
 function api_getMemberMonthPlan(memberName, baseYm, months) {
   const sh = getPlanSheet_(memberName);
   const hm = getHeaderMap_(sh, 1);
@@ -381,35 +380,6 @@ function api_getPlanInitContext() {
     return {
       ok: false,
       error: err.message,
-    };
-  }
-}
-
-/** ======================================================================
- *   祝日取得
- *  ====================================================================== */
-
-function api_getPlanHolidayList() {
-  try {
-    const sh = getPlanSheet_('祝日');
-    const lastRow = sh.getLastRow();
-
-    if (lastRow <= 1) {
-      return { ok: true, dates: [] };
-    }
-
-    const vals = sh.getRange(2, 2, lastRow - 1, 1).getValues();
-
-    const dates = vals
-      .map(r => formatDateKey_(r[0]))
-      .filter(Boolean);
-
-    return { ok: true, dates: dates };
-
-  } catch (err) {
-    return {
-      ok: false,
-      error: err.message
     };
   }
 }

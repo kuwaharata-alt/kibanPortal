@@ -137,3 +137,52 @@ function getActiveUserNameOrEmail_() {
   Logger.log('[getActiveUserNameOrEmail_] out=' + out);
   return out;
 }
+
+
+/** ======================================================================
+ *   祝日取得
+ *  ====================================================================== */
+
+function api_getPlanHolidayList() {
+  try {
+    const ss = getSS_('DB');
+    const sh = ss.getSheetByName('祝日');
+    if (!sh) return { ok: true, dates: [] };
+
+    const lastRow = sh.getLastRow();
+    if (lastRow <= 1) {
+      return { ok: true, dates: [] };
+    }
+
+    const vals = sh.getRange(2, 2, lastRow - 1, 1).getValues();
+
+    const dates = vals
+      .map(r => toHolidayKey_(r[0]))
+      .filter(Boolean);
+
+    return { ok: true, dates };
+
+  } catch (err) {
+    return {
+      ok: false,
+      error: err.message
+    };
+  }
+}
+
+function toHolidayKey_(v) {
+  if (!v) return '';
+
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) {
+    return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd');
+  }
+
+  const s = String(v).trim();
+  const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return '';
+
+  const y = m[1];
+  const mo = ('0' + m[2]).slice(-2);
+  const d = ('0' + m[3]).slice(-2);
+  return `${y}-${mo}-${d}`;
+}

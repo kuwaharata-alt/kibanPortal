@@ -1,282 +1,228 @@
 /** =========================================================
- * WBS表示用データ取得
- * type: 'SV' or 'CL'
- * 返却:
- * [
- *   {
- *     key, customer, type, statusText,
- *     sales, primary, manager, support,
- *     summary, workDetail, category,
- *     estimateHours, requestDate, inspectDate, openClose,
- *     caseStart, caseEnd,
- *     inStart, inEnd,
- *     outStart, outEnd
- *   }
- * ]
+ * 案件全体WBS
+ * Displayブックから取得
+ * 実列名対応版
  * ======================================================= */
-function api_getCaseWbsData(type) {
-  type = normalizeCaseType_(type);
 
+const CASE_WBS_CONFIG = {
+  SS_KEY: 'Display',
+  SHEET_CASE: {
+    SV: 'SV案件管理表',
+    CL: 'CL案件管理表',
+  },
+  SHEET_STATUS: {
+    SV: 'SV案件ステータス',
+    CL: 'CL案件ステータス',
+  },
+  HEADER_ROW: 1,
+  MAX_DAYS: 62,
+  MAX_ROWS: 5000,
+};
+
+function api_getCaseWbsRows(type) {
+  type = normalizeCaseTypeServer_(type);
+
+  const payload = buildCaseWbsPayload_(type);
+
+  return {
+    ok: true,
+    type,
+    maxDays: CASE_WBS_CONFIG.MAX_DAYS,
+    members: payload.members,
+    rows: payload.rows,
+  };
+}
+
+function buildCaseWbsPayload_(type) {
   const ss = getSS_('Display');
-  if (!ss) throw new Error("スプレッドシートが取得できません: getSS_('Display')");
 
-  const config = getCaseWbsSheetConfig_(type);
-  const shCase = ss.getSheetByName(config.caseSheetName);
-  const shSt   = ss.getSheetByName(config.statusSheetName);
+  const shCase = ss.getSheetByName(CASE_WBS_CONFIG.SHEET_CASE[type]);
+  const shSt   = ss.getSheetByName(CASE_WBS_CONFIG.SHEET_STATUS[type]);
 
-  if (!shCase) throw new Error('シートが見つかりません: ' + config.caseSheetName);
-  if (!shSt)   throw new Error('シートが見つかりません: ' + config.statusSheetName);
+  if (!shCase) throw new Error(`シートが見つかりません: ${CASE_WBS_CONFIG.SHEET_CASE[type]}`);
+  if (!shSt)   throw new Error(`シートが見つかりません: ${CASE_WBS_CONFIG.SHEET_STATUS[type]}`);
 
   const caseValues = shCase.getDataRange().getValues();
   const stValues   = shSt.getDataRange().getValues();
 
-  if (caseValues.length < 2) return [];
-  if (stValues.length < 2) return [];
+  if (caseValues.length < 2) return { rows: [], members: [] };
+  if (stValues.length < 2)   return { rows: [], members: [] };
 
-  const caseHeaders = caseValues[0].map(v => String(v || '').trim());
-  const stHeaders   = stValues[0].map(v => String(v || '').trim());
+  const caseHead = caseValues[CASE_WBS_CONFIG.HEADER_ROW - 1];
+  const stHead   = stValues[CASE_WBS_CONFIG.HEADER_ROW - 1];
 
-  const caseMap = headerMapFromArray_(caseHeaders);
-  const stMap   = headerMapFromArray_(stHeaders);
+  const caseRows = caseValues.slice(CASE_WBS_CONFIG.HEADER_ROW);
+  const stRows   = stValues.slice(CASE_WBS_CONFIG.HEADER_ROW);
 
-  validateRequiredHeaders_(caseMap, ['見積番号'], config.caseSheetName);
-  validateRequiredHeaders_(stMap, ['見積番号'], config.statusSheetName);
+  const cmap = headerMapFromRow_(caseHead);
+  const smap = headerMapFromRow_(stHead);
 
-  const caseRows = caseValues.slice(1);
-  const stRows   = stValues.slice(1);
-
-  const stByKey = buildStatusMapByKey_(stRows, stMap);
-
-  const results = [];
-
-  caseRows.forEach(r => {
-    const key = getCellByHeader_(r, caseMap, '見積番号');
+  const stByKey = {};
+  stRows.forEach(r => {
+    const key = nz_(r[cmapIndex_(smap, '見積番号')]);
     if (!key) return;
+    stByKey[key] = r;
+  });
 
-    const openCloseRaw = getCellByHeader_(r, caseMap, 'open/close') || 'open';
-    const openClose = String(openCloseRaw).trim().toLowerCase();
-    if (openClose !== 'open') return;
+  const memberSet = new Set();
+  const out = [];
 
-    const stRow = stByKey[key];
-    if (!stRow) return;
+  for (let i = 0; i < caseRows.length && out.length < CASE_WBS_CONFIG.MAX_ROWS; i++) {
+    const r = caseRows[i];
 
-    const period = getWbsPeriodSet_(stRow, stMap);
+    const key = nz_(r[cmapIndex_(cmap, '見積番号')]);
+    if (!key) continue;
 
-    results.push({
-      key: key,
-      customer: getCellByHeader_(r, caseMap, '顧客名'),
-      type: type,
-      statusText: getCellByHeader_(r, caseMap, 'ステータス'),
+    const rowType = nz_(r[cmapIndex_(cmap, '分類')]).toUpperCase();
 
-      sales: getCellByHeader_(r, caseMap, '担当営業'),
-      primary: getFirstExistingCell_(r, caseMap, ['担当プリ', '担当SE', '主担当エンジニア']),
-      manager: getCellByHeader_(r, caseMap, '管理者'),
-      support: getFirstExistingCell_(r, caseMap, ['サポート', 'サポート1', '副担当エンジニア']),
+    if (type === 'SV') {
+      if (rowType && rowType !== 'SV') continue;
+    } else {
+      if (rowType && rowType !== 'CL' && rowType !== 'PC') continue;
+    }
 
-      summary: getFirstExistingCell_(r, caseMap, ['案件概要', '案件名']),
-      workDetail: getCellByHeader_(r, caseMap, '作業内容'),
-      category: getCellByHeader_(r, caseMap, 'カテゴリタグ'),
-      estimateHours: getCellByHeader_(r, caseMap, '見積工数'),
-      requestDate: toYmd_(getCellRawByHeader_(r, caseMap, '作業依頼日')),
-      inspectDate: toYmd_(getCellRawByHeader_(r, caseMap, '検収予定')),
-      openClose: openClose,
+    const openClose = nz_(r[cmapIndex_(cmap, 'open/close')]);
+    const st = stByKey[key] || [];
 
-      caseStart: period.caseStart,
-      caseEnd: period.caseEnd,
-      inStart: period.inStart,
-      inEnd: period.inEnd,
-      outStart: period.outStart,
-      outEnd: period.outEnd
+    const customer   = nz_(r[cmapIndex_(cmap, '顧客名')]);
+    const se         = nz_(r[cmapIndex_(cmap, '担当プリ')]);  // 実データに合わせる
+    const supervisor = nz_(r[cmapIndex_(cmap, '監督者')]);
+    const manager    = nz_(r[cmapIndex_(cmap, '管理者')]);
+    const support    = nz_(r[cmapIndex_(cmap, 'サポート')]);
+
+    [se, supervisor, manager, support].forEach(v => {
+      if (v) splitMemberNames_(v).forEach(name => memberSet.add(name));
     });
-  });
 
-  results.sort((a, b) => {
-    const ad = a.caseStart || a.inStart || a.outStart || '9999-12-31';
-    const bd = b.caseStart || b.inStart || b.outStart || '9999-12-31';
+    const projectStart = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '案件管理_作業期間：開始'
+    ]));
+    const projectEnd = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '案件管理_作業期間：終了'
+    ]));
 
-    if (ad < bd) return -1;
-    if (ad > bd) return 1;
+    const internalStart = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '社内作業_作業期間：開始'
+    ]));
+    const internalEnd = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '社内作業_作業期間：終了'
+    ]));
 
-    return String(a.key).localeCompare(String(b.key), 'ja');
-  });
+    const externalStart = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '現地・リモート作業_作業期間：開始',
+      '現地作業_作業期間：開始'
+    ]));
+    const externalEnd = toDateStrJst_(pickFirstByNames_(st, smap, [
+      '現地・リモート作業_作業期間：終了',
+      '現地作業_作業期間：終了'
+    ]));
 
-  return results;
-}
+    out.push({
+      key,
+      customer,
+      openClose,
+      se,
+      supervisor,
+      manager,
+      support,
+      members: uniqueStrings_([
+        ...splitMemberNames_(se),
+        ...splitMemberNames_(supervisor),
+        ...splitMemberNames_(manager),
+        ...splitMemberNames_(support),
+      ]),
+      lines: [
+        {
+          category: '案件',
+          status: nz_(pickFirstByNames_(st, smap, ['案件ST'])),
+          start: projectStart,
+          end: projectEnd,
+        },
+        {
+          category: '社内',
+          status: nz_(pickFirstByNames_(st, smap, ['社内ST'])),
+          start: internalStart,
+          end: internalEnd,
+        },
+        {
+          category: '社外',
+          status: nz_(pickFirstByNames_(st, smap, ['現地ST'])),
+          start: externalStart,
+          end: externalEnd,
+        }
+      ]
+    });
+  }
 
-/** =========================================================
- * 設定
- * ======================================================= */
-function getCaseWbsSheetConfig_(type) {
   return {
-    caseSheetName:   type === 'CL' ? 'CL案件管理表' : 'SV案件管理表',
-    statusSheetName: type === 'CL' ? 'CL案件ステータス' : 'SV案件ステータス'
+    rows: out,
+    members: Array.from(memberSet).sort((a, b) => a.localeCompare(b, 'ja')),
   };
 }
 
-function normalizeCaseType_(type) {
-  const v = String(type || 'SV').trim().toUpperCase();
-  return v === 'CL' ? 'CL' : 'SV';
+/** =========================================================
+ * Helpers
+ * ======================================================= */
+function normalizeCaseTypeServer_(type) {
+  return String(type || 'SV').toUpperCase() === 'CL' ? 'CL' : 'SV';
 }
 
-/** =========================================================
- * マップ / 値取得
- * ======================================================= */
-function headerMapFromArray_(headers) {
+function headerMapFromRow_(row) {
   const map = {};
-  headers.forEach((h, i) => {
+  row.forEach((h, i) => {
     const key = String(h || '').trim();
-    if (!key) return;
-    map[key] = i;
+    if (key) map[key] = i;
   });
   return map;
 }
 
-function validateRequiredHeaders_(map, requiredHeaders, sheetName) {
-  const missing = requiredHeaders.filter(h => map[h] == null);
-  if (missing.length) {
-    throw new Error(
-      '必須ヘッダーが見つかりません: ' +
-      sheetName +
-      ' / ' +
-      missing.join(', ')
-    );
-  }
+function cmapIndex_(map, name) {
+  return map[name] != null ? map[name] : -1;
 }
 
-function getCellRawByHeader_(row, map, header) {
-  const idx = map[header];
-  if (idx == null) return '';
-  return row[idx];
-}
-
-function getCellByHeader_(row, map, header) {
-  const idx = map[header];
-  if (idx == null) return '';
-  return nz_(row[idx]);
-}
-
-function getFirstExistingCell_(row, map, headers) {
-  for (let i = 0; i < headers.length; i++) {
-    const v = getCellByHeader_(row, map, headers[i]);
-    if (v) return v;
+function pickFirstByNames_(row, map, names) {
+  if (!row || !map) return '';
+  for (let i = 0; i < names.length; i++) {
+    const idx = map[names[i]];
+    if (idx != null) return row[idx];
   }
   return '';
 }
 
-/** =========================================================
- * ステータス行の見積番号マップ
- * ======================================================= */
-function buildStatusMapByKey_(stRows, stMap) {
-  const out = {};
-  stRows.forEach(r => {
-    const key = getCellByHeader_(r, stMap, '見積番号');
-    if (!key) return;
-    out[key] = r;
-  });
-  return out;
-}
-
-/** =========================================================
- * 期間取得
- * ======================================================= */
-function getWbsPeriodSet_(stRow, stMap) {
-  const caseStart = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '案件管理_作業期間：開始',
-    '案件_開始'
-  ]));
-  const caseEnd = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '案件管理_作業期間：終了',
-    '案件_終了'
-  ]));
-
-  const inStart = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '社内作業_作業期間：開始',
-    '社内_開始'
-  ]));
-  const inEnd = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '社内作業_作業期間：終了',
-    '社内_終了'
-  ]));
-
-  let outStart = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '現地作業_作業期間：開始',
-    '現地・リモート作業_作業期間：開始',
-    '現地_開始'
-  ]));
-  let outEnd = toYmd_(getFirstExistingRaw_(stRow, stMap, [
-    '現地作業_作業期間：終了',
-    '現地・リモート作業_作業期間：終了',
-    '現地_終了'
-  ]));
-
-  if (outStart && !outEnd) outEnd = outStart;
-  if (!outStart && outEnd) outStart = outEnd;
-
-  return {
-    caseStart: caseStart,
-    caseEnd: caseEnd,
-    inStart: inStart,
-    inEnd: inEnd,
-    outStart: outStart,
-    outEnd: outEnd
-  };
-}
-
-function getFirstExistingRaw_(row, map, headers) {
-  for (let i = 0; i < headers.length; i++) {
-    const idx = map[headers[i]];
-    if (idx == null) continue;
-
-    const v = row[idx];
-    if (v !== '' && v != null) return v;
-  }
-  return '';
-}
-
-/** =========================================================
- * 文字 / 日付
- * ======================================================= */
 function nz_(v) {
   return String(v == null ? '' : v).trim();
 }
 
-function toYmd_(v) {
-  if (v == null || v === '') return '';
-
+function toDateStrJst_(v) {
+  if (!v) return '';
   if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) {
     return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd');
-  }
-
-  if (typeof v === 'number') {
-    const d = new Date(v);
-    if (!isNaN(d)) {
-      return Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd');
-    }
   }
 
   const s = String(v).trim();
   if (!s) return '';
 
-  let m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  const m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
   if (m) {
     const y = m[1];
     const mo = ('0' + m[2]).slice(-2);
-    const d = ('0' + m[3]).slice(-2);
-    return y + '-' + mo + '-' + d;
-  }
-
-  m = s.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/);
-  if (m) {
-    const y = m[1];
-    const mo = ('0' + m[2]).slice(-2);
-    const d = ('0' + m[3]).slice(-2);
-    return y + '-' + mo + '-' + d;
-  }
-
-  const d2 = new Date(s);
-  if (!isNaN(d2)) {
-    return Utilities.formatDate(d2, 'Asia/Tokyo', 'yyyy-MM-dd');
+    const d  = ('0' + m[3]).slice(-2);
+    return `${y}-${mo}-${d}`;
   }
 
   return '';
+}
+
+function splitMemberNames_(v) {
+  const s = nz_(v);
+  if (!s || s === 'ー') return [];
+  return s
+    .split(/[\/,、，\n\r\t・]/)
+    .map(x => String(x || '').trim())
+    .filter(Boolean)
+    .filter(x => x !== 'ー');
+}
+
+function uniqueStrings_(arr) {
+  return Array.from(new Set((arr || []).filter(Boolean)));
 }
