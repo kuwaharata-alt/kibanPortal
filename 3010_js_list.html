@@ -96,8 +96,6 @@ function renderCases_(rebuildHeader){
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const idxBiko = st.headerIndex[st.statusNote];
-
   for (const item of st.rows) {
     const tr = document.createElement('tr');
 
@@ -109,20 +107,23 @@ function renderCases_(rebuildHeader){
     const key = String(item?.key ?? '').trim();
     const customer = String(item?.customer ?? '').trim();
 
-    // 操作
     const btnView = document.createElement('button');
     btnView.textContent = '詳細';
-    btnView.onclick = () => openView?.(key,customer);
+    btnView.onclick = () => openView?.(key, customer);
 
     const btnStatus = document.createElement('button');
-    btnStatus.textContent = '更新';    
-    btnStatus.onclick = () => openStatus?.(key,customer);
-    
-    if (!key) { btnView.disabled = true; btnStatus.disabled = true; }
+    btnStatus.textContent = '更新';
+    btnStatus.onclick = () => openStatus?.(key, customer);
+
+    if (!key) {
+      btnView.disabled = true;
+      btnStatus.disabled = true;
+    }
 
     tdAct.append(btnView, btnStatus);
     tr.appendChild(tdAct);
-    for (let i=0; i<st.headers.length; i++){
+
+    for (let i = 0; i < st.headers.length; i++) {
       const td = document.createElement('td');
       const header = st.headers[i];
       const v = (row[i] == null) ? '' : String(row[i]);
@@ -133,7 +134,7 @@ function renderCases_(rebuildHeader){
         tr.appendChild(td);
         continue;
       }
-      
+
       if (header === '案件概要') {
         td.innerHTML = v || '';
         td.classList.add('td-case-summary');
@@ -163,11 +164,8 @@ function renderCases_(rebuildHeader){
       }
 
       if (header === '備考') {
-        const note = (idxBiko == null) ? '' : (row[idxBiko] == null ? '' : String(row[idxBiko]));
-        const html = noteToCardsHtml_(note);
-
-        td.innerHTML = html || escapeHtml_(note).replace(/\n/g,'<br>');
-        td.style.whiteSpace = 'normal';
+        td.innerHTML = v || '';
+        td.classList.add('td-remarks');
         tr.appendChild(td);
         continue;
       }
@@ -179,7 +177,6 @@ function renderCases_(rebuildHeader){
     tbody.appendChild(tr);
   }
 
-  // 件数
   const countEl = document.getElementById('count');
   const pageInfoEl = document.getElementById('pageInfo');
   if (countEl) {
@@ -512,6 +509,7 @@ function noteToCardsHtml_(noteText){
     </div>
   `;
 }
+
 function noteTitleAlias_(t){
   t = String(t || '').trim();
   if(t === '案件確認') return '案件';
@@ -558,19 +556,22 @@ function escapeHtml_(s) {
 }
 
 function loadInspectMonths(){
-
   google.script.run
     .withSuccessHandler(list => {
-
       const sel = document.getElementById('inspectMonth');
+      if (!sel) return;
 
-      list.forEach(m => {
+      const exists = new Set(
+        Array.from(sel.options).map(o => String(o.value || ''))
+      );
+
+      (list || []).forEach(m => {
+        if (exists.has(m)) return;
         const opt = document.createElement('option');
         opt.value = m;
         opt.textContent = m;
         sel.appendChild(opt);
       });
-
     })
     .api_getInspectMonths();
 }

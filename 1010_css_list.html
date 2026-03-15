@@ -528,4 +528,56 @@
     justify-content:center;
   }
 
+/* ===== 備考 ===== */
+.td-remarks{
+  padding: 6px 12px;
+  vertical-align: center;
+  white-space: normal;
+}
+
+.remarks-list{
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.remarks-row{
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: stretch;
+  border: 1px solid #cfd8e3;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  min-height: 24px;
+}
+
+.remarks-label{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
+  background: #ffffff;
+  border-right: 1px solid #cfd8e3;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 1px;
+}
+
+.remarks-text{
+  padding: 3px 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #374151;
+  white-space: normal;
+  word-break: break-word;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+}
+
 </style>

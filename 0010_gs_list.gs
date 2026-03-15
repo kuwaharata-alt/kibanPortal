@@ -34,9 +34,9 @@ const VIRTUAL_HEADERS = [
   '案件情報',
   '担当SE',
   '作業期間',
-  'カテゴリ'
+  'カテゴリ',
+  '備考'
 ];
-
 
 /** ----------------------------------------------------
  *   メインAPI（一覧）
@@ -53,7 +53,10 @@ function api_list(params) {
   const pageSize = Math.min(Math.max(Number(p.pageSize || 50), 10), 500);
   const page = Math.max(Number(p.page || 1), 1);
 
-  const inspectMonth = params.inspectMonth || '';
+  const inspectMonthRaw = String(p.inspectMonth || '');
+  const inspectMonth = (inspectMonthRaw === '__THIS_MONTH__')
+    ? Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM')
+    : inspectMonthRaw;
 
   const sh = getSS_('Display').getSheetByName(cfg.sheetName);
   if (!sh) {
@@ -206,6 +209,7 @@ function buildVirtualColumnsFast_(caseRow, idxMap, statusRow, statusHeaderMap, t
     '担当SE': buildTantoSeFast_(caseRow, idxMap),
     '作業期間': buildWorkPeriodHtmlFast_(caseRow, idxMap, statusRow, statusHeaderMap, type),
     'カテゴリ': buildCategoryTagsFast_(caseRow, idxMap),
+    '備考': buildRemarksHtmlFast_(statusRow, statusHeaderMap),
   };
 }
 
@@ -445,6 +449,49 @@ function buildCategoryTagsFast_(row, idxMap) {
     .split(/[,\u3001\s]+/)
     .map(v => v.trim())
     .filter(Boolean);
+}
+
+/** 備考 */
+function buildRemarksHtmlFast_(statusRow, statusHeaderMap) {
+  if (!statusRow || !statusHeaderMap) return '';
+
+  const pre = getStatusCommentCell_(statusRow, statusHeaderMap, ['案件確認_コメント']);
+  const inC = getStatusCommentCell_(statusRow, statusHeaderMap, ['社内作業_コメント']);
+  const out = getStatusCommentCell_(statusRow, statusHeaderMap, ['現地作業_コメント']);
+
+  const items = [
+    { label: '案件', body: pre },
+    { label: '社内', body: inC },
+    { label: '社外', body: out },
+  ];
+
+  return `
+    <div class="remarks-list">
+      ${items.map(it => `
+        <div class="remarks-row">
+          <div class="remarks-label">${escapeHtml_(it.label)}</div>
+          <div class="remarks-text">${nl2brHtml_(it.body || '')}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getStatusCommentCell_(row, headerMap, names) {
+  for (let i = 0; i < (names || []).length; i++) {
+    const idx = headerMap[names[i]];
+    if (idx === undefined) continue;
+
+    const v = row[idx];
+    if (v == null || v === '') continue;
+
+    return String(v).trim();
+  }
+  return '';
+}
+
+function nl2brHtml_(s) {
+  return escapeHtml_(String(s || '')).replace(/\r?\n/g, '<br>');
 }
 
 /** ----------------------------------------------------

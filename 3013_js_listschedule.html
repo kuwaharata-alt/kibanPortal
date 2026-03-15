@@ -354,9 +354,23 @@ function statusClassClient_(s) {
   const v = String(s || '');
 
   if (/完了/.test(v)) return 'st-done';
-  if (/対応中|進行中|作業中/.test(v)) return 'st-progress';
-  if (/保留|確認待ち|未対応|未着手/.test(v)) return 'st-wait';
-  if (/クローズ|close/i.test(v)) return 'st-close';
+  if (/対応中/.test(v)) return 'st-progress';
+  if (/未着手/.test(v)) return 'st-wait';
+  if (/クローズ/i.test(v)) return 'st-close';
+
+  if(v.includes('未アサイン')) return 'status-assign';
+  if(v.includes('アサイン中')) return 'status-assign';
+
+  if(v.includes('詳細確認')) return 'status-pill status-precheck';
+
+  if(v.includes('作業中')) return 'status-pill status-work';
+
+  if(v.includes('ﾄﾞｷｭﾒﾝﾄ')) return 'status-pill status-doc';
+
+  if(v.includes('ｸﾛｰｽﾞ前')) return 'status-pill status-close-pre';
+
+  if(v.includes('CLOSE')) return 'status-pill status-done';
+
   return '';
 }
 
