@@ -3,6 +3,7 @@
  * - 案件情報
  * - ステータス
  * - 統合取得 / 統合保存
+ * - 高速化版
  * ====================================================================== */
 
 const INPUT_CONFIG = {
@@ -39,6 +40,16 @@ const STATUS_APP_CONFIG = {
   CASE_STATUS_HEADER: 'ステータス',
 
   NA_OPTIONS: ['対応有', '対応無'],
+};
+
+const STATUS_MODAL_CACHE = {
+  MASTER_SEC: 300,     // 5分
+  ROW_INDEX_SEC: 180,  // 3分
+};
+
+const __STATUS_EXEC_CACHE = {
+  headerMap: {},
+  rowIndex: {},
 };
 
 /** =========================
@@ -151,14 +162,14 @@ function api_getCaseByKey(arg1, arg2) {
     if (!sh) return { ok: false, error: 'sheet not found for type=' + type };
 
     const headerRow = INPUT_CONFIG.HEADER_ROW;
-    const hm = buildHeaderMap_(sh, headerRow);
+    const hm = getHeaderMapCached_(sh, headerRow);
     const keyCol = hm[INPUT_CONFIG.KEY_HEADER];
     if (!keyCol) return { ok: false, error: 'key header not found: 見積番号' };
 
-    const rowNo = findRowByKey_(sh, keyCol, key, headerRow + 1);
+    const rowNo = findRowByKeyCached_(sh, keyCol, key, headerRow + 1);
     if (!rowNo) return { ok: false, error: 'not found: ' + key + ' (' + type + ')' };
 
-    const obj = readRowAsObject_(sh, rowNo, headerRow, true);
+    const obj = readRowAsObjectFast_(sh, rowNo, headerRow);
     const data = normalizeInputRowForClient_(normalizeForClient_(obj));
 
     return { ok: true, data, from: type };
@@ -208,87 +219,117 @@ function api_getStatusMaster(params) {
   try {
     params = params || {};
     const target = normalizeCaseType_(params.target || 'SV');
-
-    const sh = getSS_('DB').getSheetByName(STATUS_APP_CONFIG.MASTER_SHEET);
-    if (!sh) {
-      return { ok: false, error: 'マスタシートが見つかりません: ' + STATUS_APP_CONFIG.MASTER_SHEET };
-    }
-
-    const headerRow = STATUS_APP_CONFIG.MASTER_HEADER_ROW;
-    const headerMap = buildHeaderMap_(sh, headerRow);
-    const lastRow = sh.getLastRow();
-
-    if (lastRow <= headerRow) {
-      return {
-        ok: true,
-        target,
-        rows: [],
-        groups: [],
-        naOptions: STATUS_APP_CONFIG.NA_OPTIONS
-      };
-    }
-
-    const values = sh.getRange(headerRow + 1, 1, lastRow - headerRow, sh.getLastColumn()).getValues();
-
-    const colTarget   = headerMap['対象'];
-    const colCode     = headerMap['コード'];
-    const colBig      = headerMap['大分類'];
-    const colMid      = headerMap['中分類'];
-    const colSmall    = headerMap['小分類'];
-    const colDisp     = headerMap['表示名'];
-    const colSort     = headerMap['sort'];
-    const colClosed   = headerMap['is_closed'];
-    const colColor    = headerMap['is_color'];
-    const colForce    = headerMap['force'];
-    const colDefault  = headerMap['default'];
-    const colNaEnable = headerMap['na_enable'];
-    const colRollup   = headerMap['rollup_state'];
-    const colStHeader = headerMap['Status_Header'];
-
-    if (!colTarget || !colCode || !colBig || !colMid || !colSmall) {
-      return { ok: false, error: 'マスタの必須列（対象/コード/大分類/中分類/小分類）が不足しています' };
-    }
-
-    const rows = [];
-    for (let i = 0; i < values.length; i++) {
-      const r = values[i];
-      const t = norm_(r[colTarget - 1]).toUpperCase();
-      if (t !== target) continue;
-
-      const defRaw = colDefault ? r[colDefault - 1] : '';
-      const defStr = norm_(defRaw).toUpperCase();
-      const isDefault = defStr === 'TRUE';
-      const defaultValue = (!isDefault && defStr !== 'FALSE') ? toYmdSlash_(defRaw, COMMON.TZ) : '';
-
-      rows.push({
-        target: t,
-        code: norm_(r[colCode - 1]),
-        big: norm_(r[colBig - 1]),
-        mid: norm_(r[colMid - 1]),
-        small: norm_(r[colSmall - 1]),
-        display: norm_(colDisp ? r[colDisp - 1] : ''),
-        sort: Number(colSort ? r[colSort - 1] : r[colCode - 1]) || 0,
-        is_closed: colClosed ? String(r[colClosed - 1]).toUpperCase() === 'TRUE' : false,
-        is_color: colColor ? String(r[colColor - 1]).toUpperCase() === 'TRUE' : false,
-        force: colForce ? String(r[colForce - 1]).toUpperCase() === 'TRUE' : false,
-        is_default: isDefault,
-        default_value: defaultValue,
-        na_enable: colNaEnable ? String(r[colNaEnable - 1]).toUpperCase() === 'TRUE' : false,
-        rollup_state: norm_(colRollup ? r[colRollup - 1] : ''),
-        status_header: norm_(colStHeader ? r[colStHeader - 1] : '')
-      });
-    }
-
-    return {
-      ok: true,
-      target,
-      rows,
-      groups: buildGroups_(rows),
-      naOptions: STATUS_APP_CONFIG.NA_OPTIONS
-    };
+    const forceRefresh = !!params.forceRefresh;
+    return getStatusMasterCached_(target, forceRefresh);
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+function getStatusMasterCached_(target, forceRefresh) {
+  target = normalizeCaseType_(target || 'SV');
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'status_master_v2_' + target;
+
+  if (!forceRefresh) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        // noop
+      }
+    }
+  }
+
+  const res = loadStatusMasterRaw_(target);
+  if (res && res.ok) {
+    cache.put(cacheKey, JSON.stringify(res), STATUS_MODAL_CACHE.MASTER_SEC);
+  }
+  return res;
+}
+
+function loadStatusMasterRaw_(target) {
+  target = normalizeCaseType_(target || 'SV');
+
+  const sh = getSS_('DB').getSheetByName(STATUS_APP_CONFIG.MASTER_SHEET);
+  if (!sh) {
+    return { ok: false, error: 'マスタシートが見つかりません: ' + STATUS_APP_CONFIG.MASTER_SHEET };
+  }
+
+  const headerRow = STATUS_APP_CONFIG.MASTER_HEADER_ROW;
+  const headerMap = getHeaderMapCached_(sh, headerRow);
+  const lastRow = sh.getLastRow();
+
+  if (lastRow <= headerRow) {
+    return {
+      ok: true,
+      target,
+      rows: [],
+      groups: [],
+      naOptions: STATUS_APP_CONFIG.NA_OPTIONS
+    };
+  }
+
+  const values = sh.getRange(headerRow + 1, 1, lastRow - headerRow, sh.getLastColumn()).getValues();
+
+  const colTarget = headerMap['対象'];
+  const colCode = headerMap['コード'];
+  const colBig = headerMap['大分類'];
+  const colMid = headerMap['中分類'];
+  const colSmall = headerMap['小分類'];
+  const colDisp = headerMap['表示名'];
+  const colSort = headerMap['sort'];
+  const colClosed = headerMap['is_closed'];
+  const colColor = headerMap['is_color'];
+  const colForce = headerMap['force'];
+  const colDefault = headerMap['default'];
+  const colNaEnable = headerMap['na_enable'];
+  const colRollup = headerMap['rollup_state'];
+  const colStHeader = headerMap['Status_Header'];
+
+  if (!colTarget || !colCode || !colBig || !colMid || !colSmall) {
+    return { ok: false, error: 'マスタの必須列（対象/コード/大分類/中分類/小分類）が不足しています' };
+  }
+
+  const rows = [];
+  for (let i = 0; i < values.length; i++) {
+    const r = values[i];
+    const t = norm_(r[colTarget - 1]).toUpperCase();
+    if (t !== target) continue;
+
+    const defRaw = colDefault ? r[colDefault - 1] : '';
+    const defStr = norm_(defRaw).toUpperCase();
+    const isDefault = defStr === 'TRUE';
+    const defaultValue = (!isDefault && defStr !== 'FALSE') ? toYmdSlash_(defRaw, COMMON.TZ) : '';
+
+    rows.push({
+      target: t,
+      code: norm_(r[colCode - 1]),
+      big: norm_(r[colBig - 1]),
+      mid: norm_(r[colMid - 1]),
+      small: norm_(r[colSmall - 1]),
+      display: norm_(colDisp ? r[colDisp - 1] : ''),
+      sort: Number(colSort ? r[colSort - 1] : r[colCode - 1]) || 0,
+      is_closed: colClosed ? String(r[colClosed - 1]).toUpperCase() === 'TRUE' : false,
+      is_color: colColor ? String(r[colColor - 1]).toUpperCase() === 'TRUE' : false,
+      force: colForce ? String(r[colForce - 1]).toUpperCase() === 'TRUE' : false,
+      is_default: isDefault,
+      default_value: defaultValue,
+      na_enable: colNaEnable ? String(r[colNaEnable - 1]).toUpperCase() === 'TRUE' : false,
+      rollup_state: norm_(colRollup ? r[colRollup - 1] : ''),
+      status_header: norm_(colStHeader ? r[colStHeader - 1] : '')
+    });
+  }
+
+  return {
+    ok: true,
+    target,
+    rows,
+    groups: buildGroups_(rows),
+    naOptions: STATUS_APP_CONFIG.NA_OPTIONS
+  };
 }
 
 function buildGroups_(rows) {
@@ -329,7 +370,7 @@ function buildGroups_(rows) {
     if (r.default_value) mm.is_date = true;
     if (!mm.status_header && r.status_header) mm.status_header = r.status_header;
 
-    // ★ is_closed=TRUE は画面表示用 options には含めない
+    // is_closed=TRUE は画面表示用 options には含めない
     if (r.is_closed) return;
 
     mm.options.push({
@@ -371,66 +412,71 @@ function api_getCaseStatus(req) {
     const key = norm_(req.key);
     if (!key) return { ok: false, error: '見積番号が空です' };
 
-    const shS = getDisplayStatusSheet_(type);
-    if (!shS) return { ok: true, statusMap: {}, naGroups: {}, currentCode: '' };
-
-    const hmS = buildHeaderMap_(shS, 1);
-    const colKey = hmS[STATUS_APP_CONFIG.KEY_HEADER];
-    if (!colKey) return { ok: false, error: '見積番号列がありません' };
-
-    const rowNo = findRowByKey_(shS, colKey, key, 2);
-    if (!rowNo) return { ok: true, statusMap: {}, naGroups: {}, currentCode: '' };
-
-    const master = api_getStatusMaster({ target: type });
+    const master = req.master && req.master.ok ? req.master : getStatusMasterCached_(type);
     if (!master.ok) return { ok: false, error: 'マスタ取得失敗' };
 
-    const statusMap = {};
-    const naGroups = {};
-
-    (master.groups || []).forEach(g => {
-      let allNa = true;
-      let hasValue = false;
-
-      (g.mids || []).forEach(m => {
-        const colName = m.status_header || statusColName_(g.big, m.mid);
-        const col = hmS[colName];
-        if (!col) return;
-
-        const v = shS.getRange(rowNo, col).getValue();
-        if (v == null || v === '') return;
-
-        hasValue = true;
-
-        const stKey = 'ST_' + g.big + '__' + m.mid;
-        statusMap[stKey] = m.is_date ? toInputDateValue_(v) : String(v).trim();
-
-        if (String(v).trim() !== 'ー') allNa = false;
-      });
-
-      if (g.na_enable && hasValue && allNa) {
-        naGroups[g.big] = true;
-      }
-    });
-
-    getCommentTargetBigs_(type).forEach(big => {
-      const col = getCommentCol_(hmS, type, big);
-      if (!col) return;
-
-      const v = shS.getRange(rowNo, col).getValue();
-      if (v != null && String(v).trim() !== '') {
-        statusMap['CM_' + big] = String(v);
-      }
-    });
-
-    let currentCode = '';
-    if (hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]) {
-      currentCode = norm_(shS.getRange(rowNo, hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]).getValue());
-    }
-
-    return { ok: true, statusMap, naGroups, currentCode };
+    return buildCaseStatusResponse_(type, key, master);
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+function buildCaseStatusResponse_(type, key, master) {
+  const shS = getDisplayStatusSheet_(type);
+  if (!shS) return { ok: true, statusMap: {}, naGroups: {}, currentCode: '' };
+
+  const hmS = getHeaderMapCached_(shS, 1);
+  const colKey = hmS[STATUS_APP_CONFIG.KEY_HEADER];
+  if (!colKey) return { ok: false, error: '見積番号列がありません' };
+
+  const rowNo = findRowByKeyCached_(shS, colKey, key, 2);
+  if (!rowNo) return { ok: true, statusMap: {}, naGroups: {}, currentCode: '' };
+
+  const rowVals = readSheetRowValues_(shS, rowNo);
+
+  const statusMap = {};
+  const naGroups = {};
+
+  (master.groups || []).forEach(g => {
+    let allNa = true;
+    let hasValue = false;
+
+    (g.mids || []).forEach(m => {
+      const colName = m.status_header || statusColName_(g.big, m.mid);
+      const col = hmS[colName];
+      if (!col) return;
+
+      const v = rowVals[col - 1];
+      if (v == null || v === '') return;
+
+      hasValue = true;
+
+      const stKey = 'ST_' + g.big + '__' + m.mid;
+      statusMap[stKey] = m.is_date ? toInputDateValue_(v) : String(v).trim();
+
+      if (String(v).trim() !== 'ー') allNa = false;
+    });
+
+    if (g.na_enable && hasValue && allNa) {
+      naGroups[g.big] = true;
+    }
+  });
+
+  getCommentTargetBigs_(type).forEach(big => {
+    const col = getCommentCol_(hmS, type, big);
+    if (!col) return;
+
+    const v = rowVals[col - 1];
+    if (v != null && String(v).trim() !== '') {
+      statusMap['CM_' + big] = String(v);
+    }
+  });
+
+  const currentCode = hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]
+    ? norm_(rowVals[hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER] - 1])
+    : '';
+
+  return { ok: true, statusMap, naGroups, currentCode };
 }
 
 function api_saveCaseStatus(req) {
@@ -450,19 +496,19 @@ function api_saveCaseStatus(req) {
     if (!shS) return { ok: false, error: '保存先シートがありません' };
     if (!shM) return { ok: false, error: '案件管理表がありません' };
 
-    const hmS = buildHeaderMap_(shS, 1);
-    const hmM = buildHeaderMap_(shM, STATUS_APP_CONFIG.CASE_HEADER_ROW);
+    const hmS = getHeaderMapCached_(shS, 1);
+    const hmM = getHeaderMapCached_(shM, STATUS_APP_CONFIG.CASE_HEADER_ROW);
 
     const colKeyS = hmS[STATUS_APP_CONFIG.KEY_HEADER];
     if (!colKeyS) return { ok: false, error: '見積番号列がありません' };
 
-    const rowNo = findRowByKey_(shS, colKeyS, key, 2);
+    const rowNo = findRowByKeyCached_(shS, colKeyS, key, 2);
     if (!rowNo) return { ok: false, error: '見積番号が見つかりません: ' + key };
 
-    const rowNoM = findRowByKey_(shM, hmM[STATUS_APP_CONFIG.KEY_HEADER], key, STATUS_APP_CONFIG.CASE_HEADER_ROW + 1);
+    const rowNoM = findRowByKeyCached_(shM, hmM[STATUS_APP_CONFIG.KEY_HEADER], key, STATUS_APP_CONFIG.CASE_HEADER_ROW + 1);
     if (!rowNoM) return { ok: false, error: '案件管理表に見積番号が見つかりません: ' + key };
 
-    const master = api_getStatusMaster({ target: type });
+    const master = getStatusMasterCached_(type);
     if (!master.ok) return { ok: false, error: 'マスタ取得失敗' };
 
     const naSet = buildNaSet_(naBigs);
@@ -470,11 +516,13 @@ function api_saveCaseStatus(req) {
     clearTargetStatusCols_(shS, rowNo, hmS, master);
     applyNaMarks_(shS, rowNo, hmS, master, naSet);
     applyStatusValues_(shS, rowNo, hmS, statusMap, naSet, master);
-    writeCommentValues_(shS, rowNo, hmS, type, statusMap);
-    writeStatusMeta_(shS, rowNo, hmS, currentCode);
+    writeCommentAndMeta_(shS, rowNo, hmS, type, statusMap, currentCode);
     writeSummaryColsToStatusSheet_(type, shS, rowNo, hmS, master, statusMap, naSet);
 
     syncCaseSheetAfterStatusSave_(type, rowNoM, shM, hmM, master, statusMap, naSet, currentCode);
+
+    invalidateRowIndexCache_(shS, hmS[STATUS_APP_CONFIG.KEY_HEADER]);
+    invalidateRowIndexCache_(shM, hmM[STATUS_APP_CONFIG.KEY_HEADER]);
 
     return { ok: true };
   } catch (e) {
@@ -493,20 +541,21 @@ function buildNaSet_(naBigs) {
 }
 
 function clearTargetStatusCols_(shS, rowNo, hmS, master) {
-  const cols = [];
+  const uniq = {};
   (master.groups || []).forEach(g => {
     (g.mids || []).forEach(m => {
       const colName = m.status_header || statusColName_(g.big, m.mid);
       const col = hmS[colName];
-      if (col) cols.push(col);
+      if (col) uniq[col] = true;
     });
   });
 
+  const cols = Object.keys(uniq).map(Number).filter(Boolean);
   writeSameRowByCols_(shS, rowNo, cols, () => '');
 }
 
 function applyNaMarks_(shS, rowNo, hmS, master, naSet) {
-  const cols = [];
+  const uniq = {};
   (master.groups || []).forEach(g => {
     const big = norm_(g.big);
     if (!big || !naSet[big]) return;
@@ -514,16 +563,17 @@ function applyNaMarks_(shS, rowNo, hmS, master, naSet) {
     (g.mids || []).forEach(m => {
       const colName = m.status_header || statusColName_(big, m.mid);
       const col = hmS[colName];
-      if (col) cols.push(col);
+      if (col) uniq[col] = true;
     });
   });
 
+  const cols = Object.keys(uniq).map(Number).filter(Boolean);
   writeSameRowByCols_(shS, rowNo, cols, () => 'ー');
 }
 
 function applyStatusValues_(shS, rowNo, hmS, statusMap, naSet, master) {
   const setMap = {};
-  const cols = [];
+  const uniq = {};
 
   Object.keys(statusMap || {}).forEach(stKey => {
     if (!String(stKey).startsWith('ST_')) return;
@@ -541,42 +591,44 @@ function applyStatusValues_(shS, rowNo, hmS, statusMap, naSet, master) {
     const col = hmS[colName];
     if (!col) return;
 
-    cols.push(col);
+    uniq[col] = true;
     setMap[col] = statusMap[stKey];
   });
 
+  const cols = Object.keys(uniq).map(Number).filter(Boolean);
   writeSameRowByCols_(shS, rowNo, cols, col => setMap[col]);
 }
 
-function writeCommentValues_(shS, rowNo, hmS, type, statusMap) {
+function writeCommentAndMeta_(shS, rowNo, hmS, type, statusMap, currentCode) {
+  const updater = getActiveUserNameOrEmail_();
+  const updates = {};
+
   getCommentTargetBigs_(type).forEach(big => {
     const col = getCommentCol_(hmS, type, big);
     if (!col) return;
-
-    const v = statusMap['CM_' + big] == null ? '' : String(statusMap['CM_' + big]);
-    shS.getRange(rowNo, col).setValue(v);
+    updates[col] = statusMap['CM_' + big] == null ? '' : String(statusMap['CM_' + big]);
   });
-}
-
-function writeStatusMeta_(shS, rowNo, hmS, currentCode) {
-  const updater = getActiveUserNameOrEmail_();
-  Logger.log('[writeStatusMeta_] row=' + rowNo + ' updater=' + updater);
 
   if (hmS[STATUS_APP_CONFIG.UPDATE_AT_HEADER]) {
-    shS.getRange(rowNo, hmS[STATUS_APP_CONFIG.UPDATE_AT_HEADER]).setValue(nowYmd_(true));
+    updates[hmS[STATUS_APP_CONFIG.UPDATE_AT_HEADER]] = nowYmd_(true);
   }
 
   if (hmS[STATUS_APP_CONFIG.UPDATE_BY_HEADER]) {
-    shS.getRange(rowNo, hmS[STATUS_APP_CONFIG.UPDATE_BY_HEADER]).setValue(updater);
+    updates[hmS[STATUS_APP_CONFIG.UPDATE_BY_HEADER]] = updater;
   }
 
   if (hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]) {
-    shS.getRange(rowNo, hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]).setValue(currentCode || '');
+    updates[hmS[STATUS_APP_CONFIG.CURRENT_CODE_HEADER]] = currentCode || '';
   }
 
   if (hmS['open/close']) {
-    shS.getRange(rowNo, hmS['open/close']).setValue(openCloseFromCode_(currentCode));
+    updates[hmS['open/close']] = openCloseFromCode_(currentCode);
   }
+
+  const cols = Object.keys(updates).map(Number).filter(Boolean);
+  if (!cols.length) return;
+
+  writeSameRowByCols_(shS, rowNo, cols, col => updates[col]);
 }
 
 /** =========================
@@ -585,16 +637,16 @@ function writeStatusMeta_(shS, rowNo, hmS, currentCode) {
 
 function writeSummaryColsToStatusSheet_(type, shS, rowNo, hmS, master, statusMap, naSet) {
   const caseSt = resolveCaseStatusByRule_(type, master, statusMap, naSet);
-  const inSt   = resolveBigRollupState_(master, statusMap, naSet, '社内作業');
-  const outSt  = resolveBigRollupState_(master, statusMap, naSet, getFieldWorkBigName_(type));
-  const docSt  = resolveBigRollupState_(master, statusMap, naSet, 'ドキュメント');
+  const inSt = resolveBigRollupState_(master, statusMap, naSet, '社内作業');
+  const outSt = resolveBigRollupState_(master, statusMap, naSet, getFieldWorkBigName_(type));
+  const docSt = resolveBigRollupState_(master, statusMap, naSet, 'ドキュメント');
 
   const updates = {};
   if (hmS['案件ST']) updates[hmS['案件ST']] = caseSt || '';
   if (hmS['社内ST']) updates[hmS['社内ST']] = inSt || '';
   if (hmS['現地ST']) updates[hmS['現地ST']] = outSt || '';
   if (hmS['Doc.ST']) updates[hmS['Doc.ST']] = docSt || '';
-  if (hmS['DocST'])  updates[hmS['DocST']]  = docSt || '';
+  if (hmS['DocST']) updates[hmS['DocST']] = docSt || '';
 
   const cols = Object.keys(updates).map(Number).filter(Boolean);
   if (!cols.length) return;
@@ -606,9 +658,9 @@ function syncCaseSheetAfterStatusSave_(type, rowNoM, shM, hmM, master, statusMap
   const updater = getActiveUserNameOrEmail_();
 
   const caseSt = resolveCaseStatusByRule_(type, master, statusMap, naSet);
-  const inSt   = resolveBigRollupState_(master, statusMap, naSet, '社内作業');
-  const outSt  = resolveBigRollupState_(master, statusMap, naSet, getFieldWorkBigName_(type));
-  const docSt  = resolveBigRollupState_(master, statusMap, naSet, 'ドキュメント');
+  const inSt = resolveBigRollupState_(master, statusMap, naSet, '社内作業');
+  const outSt = resolveBigRollupState_(master, statusMap, naSet, getFieldWorkBigName_(type));
+  const docSt = resolveBigRollupState_(master, statusMap, naSet, 'ドキュメント');
 
   const summaryText = [
     `案件ST：${caseSt || ''}`,
@@ -625,7 +677,7 @@ function syncCaseSheetAfterStatusSave_(type, rowNoM, shM, hmM, master, statusMap
   if (hmM['社内ST']) updates[hmM['社内ST']] = inSt || '';
   if (hmM['現地ST']) updates[hmM['現地ST']] = outSt || '';
   if (hmM['Doc.ST']) updates[hmM['Doc.ST']] = docSt || '';
-  if (hmM['DocST'])  updates[hmM['DocST']]  = docSt || '';
+  if (hmM['DocST']) updates[hmM['DocST']] = docSt || '';
 
   if (hmM[STATUS_APP_CONFIG.UPDATE_AT_HEADER]) {
     updates[hmM[STATUS_APP_CONFIG.UPDATE_AT_HEADER]] = nowYmd_(true);
@@ -646,29 +698,57 @@ function syncCaseSheetAfterStatusSave_(type, rowNoM, shM, hmM, master, statusMap
   writeSameRowByCols_(shM, rowNoM, cols, col => updates[col]);
 }
 
+function getMidOptionByValue_(master, big, mid, rawValue) {
+  const mm = findMidMaster_(master, big, mid);
+  if (!mm) return null;
+
+  const s = String(rawValue ?? '').trim();
+  if (!s) return null;
+
+  return (mm.options || []).find(o =>
+    norm_(o.code) === norm_(s) ||
+    norm_(o.small) === norm_(s) ||
+    norm_(o.display) === norm_(s)
+  ) || null;
+}
+
+function getMidResolvedLabel_(master, statusMap, big, mid) {
+  const raw = getMidRawStatus_(statusMap, big, mid);
+  if (!raw) return '';
+
+  const opt = getMidOptionByValue_(master, big, mid, raw);
+  if (!opt) return String(raw).trim();
+
+  return String(opt.small || opt.display || raw).trim();
+}
+
 /** =========================
  * 案件ST / rollup 判定
  * ========================= */
 
 function resolveCaseStatusByRule_(type, master, statusMap, naSet) {
   const assignBig = '案件確認';
-  const checkBig  = '案件確認';
-  const inBig     = '社内作業';
-  const outBig    = getFieldWorkBigName_(type);
-  const docBig    = 'ドキュメント';
+  const checkBig = '案件確認';
+  const inBig = '社内作業';
+  const outBig = getFieldWorkBigName_(type);
+  const docBig = 'ドキュメント';
   const caseStBig = '案件ステータス';
 
   // ① アサイン系
-  const assignState = resolveMidsRollupState_(master, statusMap, naSet, assignBig, getAssignRelatedMids_(master, type));
+  const assignState = resolveMidsRollupState_(
+    master, statusMap, naSet, assignBig, getAssignRelatedMids_(master, type)
+  );
   if (assignState === '未着手') return '未アサイン';
   if (assignState === '対応中') return 'アサイン中';
 
   // ② 詳細確認
-  const checkState = resolveMidsRollupState_(master, statusMap, naSet, checkBig, getDetailCheckMids_(master, type));
+  const checkState = resolveMidsRollupState_(
+    master, statusMap, naSet, checkBig, getDetailCheckMids_(master, type)
+  );
   if (checkState === '未着手' || checkState === '対応中') return '詳細確認中';
 
   // ③ 作業中
-  const inState  = resolveBigRollupState_(master, statusMap, naSet, inBig);
+  const inState = resolveBigRollupState_(master, statusMap, naSet, inBig);
   const outState = resolveBigRollupState_(master, statusMap, naSet, outBig);
   if (!(inState === '完了' && outState === '完了')) return '作業中';
 
@@ -679,35 +759,55 @@ function resolveCaseStatusByRule_(type, master, statusMap, naSet) {
   // ⑤ 案件ステータス
   if (!hasBigInMaster_(master, caseStBig)) return '案件クローズ前対応中';
 
-  // 「案件対応」単独を見る
-  const caseTaiouState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['案件対応']);
+  const caseTaiouRaw   = getMidRawStatus_(statusMap, caseStBig, '案件対応');
+  const sagyoRaw       = getMidRawStatus_(statusMap, caseStBig, '作業報告書');
+  const fbRaw          = getMidRawStatus_(statusMap, caseStBig, 'FBアンケート');
 
-  // 案件対応が完了なら、まず SE対応完了 を返す
-  if (caseTaiouState === '完了') {
-    const reportState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['作業報告書']);
-    const fbState     = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['FBアンケート']);
+  const caseTaiouLabel = getMidResolvedLabel_(master, statusMap, caseStBig, '案件対応');
+  const sagyoLabel     = getMidResolvedLabel_(master, statusMap, caseStBig, '作業報告書');
+  const fbLabel        = getMidResolvedLabel_(master, statusMap, caseStBig, 'FBアンケート');
 
-    // 他がまだ残っている間は SE対応完了
-    if (!(reportState === '完了' && fbState === '完了')) {
-      return 'SE対応完了';
-    }
+  const caseTaiouNorm = normalizeSummaryStateStrict_(caseTaiouLabel);
+  const sagyoNorm     = normalizeSummaryStateStrict_(sagyoLabel);
+  const fbNorm        = normalizeSummaryStateStrict_(fbLabel);
+
+  Logger.log(
+    '[resolveCaseStatusByRule_] ' +
+    '案件 raw=' + caseTaiouRaw + ' label=' + caseTaiouLabel + ' norm=' + caseTaiouNorm +
+    ' / 報告書 raw=' + sagyoRaw + ' label=' + sagyoLabel + ' norm=' + sagyoNorm +
+    ' / FB raw=' + fbRaw + ' label=' + fbLabel + ' norm=' + fbNorm
+  );
+
+  // 案件対応が SE対応完了 なら専用ステータス
+  if (caseTaiouLabel === 'SE対応完了') {
+    return 'SE対応完了';
   }
 
-  // ⑥ クローズ前対応
-  const preCloseMids = getPreCloseMids_(master, type);
-  const closePreState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, preCloseMids);
-  if (closePreState !== '完了') return '案件クローズ前対応中';
+  // 案件対応が未完了ならクローズ前対応中
+  if (caseTaiouNorm !== '完了') {
+    return '案件クローズ前対応中';
+  }
 
-  // ⑦ CLOSE
+  // 報告書 or FB が残っていればクローズ前対応中
+  if (!(sagyoNorm === '完了' && fbNorm === '完了')) {
+    return '案件クローズ前対応中';
+  }
+
+  // ⑥ CLOSE
   const closeMids = getCloseMids_(master, type);
 
-  // 案件クローズ中分類が無い運用なら、事前項目完了で CLOSE
+  // 案件クローズ中分類が無い運用ならここで CLOSE
   if (!closeMids.length) return 'CLOSE';
 
   const closeState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, closeMids);
   if (closeState === '完了') return 'CLOSE';
 
   return '案件クローズ前対応中';
+}
+
+function getMidRawStatus_(statusMap, big, mid) {
+  const stKey = 'ST_' + norm_(big) + '__' + norm_(mid);
+  return String(statusMap?.[stKey] ?? '').trim();
 }
 
 function getDetailCheckMids_(master, type) {
@@ -785,14 +885,14 @@ function resolveMidRollupState_(master, statusMap, naSet, big, mid) {
     return s ? '対応中' : '未着手';
   }
 
-  // ① code / small / display のどれでも引けるようにする
+  // code / small / display のどれでも引けるようにする
   const opt = (mm.options || []).find(o =>
     norm_(o.code) === s ||
     norm_(o.small) === s ||
     norm_(o.display) === s
   );
 
-  // ② summary判定は業務ルール優先
+  // summary判定は業務ルール優先
   if (opt) {
     return normalizeSummaryStateStrict_(opt.small || opt.display || s);
   }
@@ -942,30 +1042,91 @@ function api_getUnifiedCaseModal(req) {
     const key = norm_(req.key || req.mitsuNo);
     if (!key) return { ok: false, error: 'key が空です' };
 
-    const detailRes = api_getCaseDetail(type, key);
-    if (!detailRes.ok) return { ok: false, error: detailRes.error || '詳細取得失敗' };
+    const includeDetail = req.includeDetail === true;
+    const includeInput = req.includeInput === true;
 
-    const statusMasterRes = api_getStatusMaster({ target: type });
-    if (!statusMasterRes.ok) return { ok: false, error: statusMasterRes.error || 'ステータスマスタ取得失敗' };
+    const statusMasterRes = getStatusMasterCached_(type);
+    if (!statusMasterRes.ok) {
+      return { ok: false, error: statusMasterRes.error || 'ステータスマスタ取得失敗' };
+    }
 
-    const caseStatusRes = api_getCaseStatus({ type, key });
-    if (!caseStatusRes.ok) return { ok: false, error: caseStatusRes.error || '案件ステータス取得失敗' };
+    const caseStatusRes = buildCaseStatusResponse_(type, key, statusMasterRes);
+    if (!caseStatusRes.ok) {
+      return { ok: false, error: caseStatusRes.error || '案件ステータス取得失敗' };
+    }
 
-    const inputRes = api_getCaseByKey({ type, key });
-    if (!inputRes.ok) return { ok: false, error: inputRes.error || '案件情報取得失敗' };
+    let detail = null;
+    if (includeDetail) {
+      const detailRes = api_getCaseDetail(type, key);
+      if (!detailRes.ok) {
+        return { ok: false, error: detailRes.error || '詳細取得失敗' };
+      }
+      detail = detailRes.data || {};
+    }
+
+    let input = null;
+    if (includeInput) {
+      const inputRes = api_getCaseByKey({ type, key });
+      if (!inputRes.ok) {
+        return { ok: false, error: inputRes.error || '案件情報取得失敗' };
+      }
+      input = inputRes.data || {};
+    }
 
     return {
       ok: true,
       type,
       key,
-      detail: detailRes.data || {},
+      detail,
       statusMaster: statusMasterRes,
       caseStatus: {
         statusMap: caseStatusRes.statusMap || {},
         naGroups: caseStatusRes.naGroups || {},
         currentCode: caseStatusRes.currentCode || ''
       },
-      input: inputRes.data || {}
+      input
+    };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function api_getUnifiedModalDetail(req) {
+  try {
+    req = req || {};
+    const type = normalizeCaseType_(req.type || 'SV');
+    const key = norm_(req.key);
+    if (!key) return { ok: false, error: 'key が空です' };
+
+    const res = api_getCaseDetail(type, key);
+    if (!res.ok) return { ok: false, error: res.error || '詳細取得失敗' };
+
+    return {
+      ok: true,
+      type,
+      key,
+      detail: res.data || {}
+    };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function api_getUnifiedModalInput(req) {
+  try {
+    req = req || {};
+    const type = normalizeCaseType_(req.type || 'SV');
+    const key = norm_(req.key);
+    if (!key) return { ok: false, error: 'key が空です' };
+
+    const res = api_getCaseByKey({ type, key });
+    if (!res.ok) return { ok: false, error: res.error || '案件情報取得失敗' };
+
+    return {
+      ok: true,
+      type,
+      key,
+      input: res.data || {}
     };
   } catch (e) {
     return { ok: false, error: String(e) };
@@ -1002,4 +1163,93 @@ function api_saveUnifiedCaseModal(req) {
   } catch (e) {
     return { ok: false, error: String(e) };
   }
+}
+
+/** =========================
+ * 高速化ヘルパー
+ * ========================= */
+
+function getHeaderMapCached_(sheet, headerRow) {
+  const key = sheet.getParent().getId() + '::' + sheet.getSheetId() + '::' + Number(headerRow || 1);
+
+  if (__STATUS_EXEC_CACHE.headerMap[key]) {
+    return __STATUS_EXEC_CACHE.headerMap[key];
+  }
+
+  const map = buildHeaderMap_(sheet, headerRow || 1);
+  __STATUS_EXEC_CACHE.headerMap[key] = map;
+  return map;
+}
+
+function findRowByKeyCached_(sheet, keyCol, key, startRow) {
+  key = norm_(key);
+  startRow = Number(startRow || 2);
+
+  if (!sheet || !keyCol || !key) return 0;
+
+  const cacheKey = [
+    sheet.getParent().getId(),
+    sheet.getSheetId(),
+    keyCol,
+    startRow
+  ].join('::');
+
+  if (!__STATUS_EXEC_CACHE.rowIndex[cacheKey]) {
+    __STATUS_EXEC_CACHE.rowIndex[cacheKey] = buildRowIndexMap_(sheet, keyCol, startRow);
+  }
+
+  const map = __STATUS_EXEC_CACHE.rowIndex[cacheKey];
+  return Number(map[key] || 0);
+}
+
+function invalidateRowIndexCache_(sheet, keyCol, startRow) {
+  if (!sheet || !keyCol) return;
+  startRow = Number(startRow || 2);
+
+  const cacheKey = [
+    sheet.getParent().getId(),
+    sheet.getSheetId(),
+    keyCol,
+    startRow
+  ].join('::');
+
+  delete __STATUS_EXEC_CACHE.rowIndex[cacheKey];
+}
+
+function buildRowIndexMap_(sheet, keyCol, startRow) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return {};
+
+  const values = sheet.getRange(startRow, keyCol, lastRow - startRow + 1, 1).getDisplayValues();
+  const map = {};
+
+  for (let i = 0; i < values.length; i++) {
+    const k = norm_(values[i][0]);
+    if (!k) continue;
+    if (!map[k]) map[k] = startRow + i;
+  }
+
+  return map;
+}
+
+function readSheetRowValues_(sheet, rowNo) {
+  const lastCol = sheet.getLastColumn();
+  if (!lastCol || rowNo < 1) return [];
+  return sheet.getRange(rowNo, 1, 1, lastCol).getValues()[0];
+}
+
+function readRowAsObjectFast_(sheet, rowNo, headerRow) {
+  const lastCol = sheet.getLastColumn();
+  if (!lastCol || rowNo < 1) return {};
+
+  const headers = sheet.getRange(headerRow, 1, 1, lastCol).getDisplayValues()[0];
+  const row = sheet.getRange(rowNo, 1, 1, lastCol).getValues()[0];
+
+  const obj = {};
+  for (let i = 0; i < headers.length; i++) {
+    const h = String(headers[i] || '').trim();
+    if (!h) continue;
+    obj[h] = row[i];
+  }
+  return obj;
 }

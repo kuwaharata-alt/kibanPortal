@@ -51,7 +51,7 @@ async function openStatus(key, customer=''){
     return;
   }
 
- await openUnifiedModal(key, customer)
+  await openUnifiedModal(key, customer)
     .then(() => switchUnifiedTab_('status'))
     .catch(err => {
       console.error(err);
@@ -63,8 +63,8 @@ async function openStatus(key, customer=''){
  * Open / Close
  * ======================================================= */
 
-async function openUnifiedModal(caseKey, customer) {
-  const modal = $id('modalStatus');
+async function openUnifiedModal(caseKey, customer){
+  const modal = document.getElementById('modalStatus');
   if (!modal) throw new Error('modalStatus not found');
 
   const type = normalizeCaseTypeClient_(window.AppState?.type || 'SV');
@@ -75,14 +75,14 @@ async function openUnifiedModal(caseKey, customer) {
   modal.dataset.type = type;
   modal.dataset.tab = 'detail';
 
-  if ($id('stTitle')) {
-    $id('stTitle').textContent = `【${caseKey}】${customer}`;
+  if (document.getElementById('stTitle')) {
+    document.getElementById('stTitle').textContent = `【${caseKey}】${customer}`;
   }
-  if ($id('stMeta')) {
-    $id('stMeta').textContent = '読込中...';
+  if (document.getElementById('stMeta')) {
+    document.getElementById('stMeta').textContent = '読込中...';
   }
-  if ($id('stErr')) {
-    $id('stErr').textContent = '';
+  if (document.getElementById('stErr')) {
+    document.getElementById('stErr').textContent = '';
   }
 
   window.__unifiedModalState = {
@@ -97,55 +97,43 @@ async function openUnifiedModal(caseKey, customer) {
       currentCode: ''
     },
     input: null,
-    loaded: false,
-    activeTab: 'detail',
-    dirty: false,
-    statusFormBuilt: false,
     inputFormBuilt: false
   };
 
-  clearUnifiedPanels_();
-  switchUnifiedTab_('detail', true);
+  try {
+    const res = await gasCall_('api_getUnifiedCaseModal', {
+      type,
+      key: caseKey
+    });
 
-  const res = await fetchUnifiedCaseModal_(type, caseKey);
-
-  if (!res || !res.ok) {
-    if ($id('stMeta')) {
-      $id('stMeta').textContent = '';
+    if (!res || !res.ok) {
+      throw new Error(res?.error || '読込に失敗しました');
     }
-    if ($id('stErr')) {
-      $id('stErr').textContent = res?.error || '読込失敗';
+
+    const st = window.__unifiedModalState;
+    st.detail = res.detail || {};
+    st.statusMaster = res.statusMaster || null;
+    st.caseStatus = res.caseStatus || { statusMap:{}, naGroups:{}, currentCode:'' };
+    st.input = res.input || {};
+
+    renderUnifiedDetail_();
+    renderUnifiedStatus_();
+    await renderUnifiedInput_();
+
+    setUnifiedTab_('detail');
+
+    if (document.getElementById('stMeta')) {
+      document.getElementById('stMeta').textContent = '';
     }
-    throw new Error(res?.error || '読込失敗');
+  } catch (err) {
+    console.error(err);
+    if (document.getElementById('stErr')) {
+      document.getElementById('stErr').textContent = err?.message || String(err);
+    }
+    if (document.getElementById('stMeta')) {
+      document.getElementById('stMeta').textContent = '';
+    }
   }
-
-  const st = window.__unifiedModalState;
-
-  st.detail = res.detail || {};
-  st.statusMaster = res.statusMaster || {
-    groups: [],
-    naOptions: ['対応有', '対応無']
-  };
-  st.caseStatus = {
-    statusMap: { ...(res.caseStatus?.statusMap || {}) },
-    naGroups: { ...(res.caseStatus?.naGroups || {}) },
-    currentCode: res.caseStatus?.currentCode || ''
-  };
-  st.input = normalizeInputRow_(res.input || {});
-  st.loaded = true;
-
-  renderUnifiedDetail_();
-  renderUnifiedStatus_();
-  await renderUnifiedInput_();
-
-  bindUnifiedDirtyEvents_();
-  refreshUnifiedSaveState_();
-
-  if ($id('stMeta')) {
-    $id('stMeta').textContent = '';
-  }
-
-  return true;
 }
 
 function closeUnifiedModal_(){
@@ -231,6 +219,49 @@ function switchUnifiedTab_(tab, force=false){
   if (pDetail) pDetail.classList.toggle('is-hidden', tab !== 'detail');
   if (pStatus) pStatus.classList.toggle('is-hidden', tab !== 'status');
   if (pInput)  pInput.classList.toggle('is-hidden', tab !== 'input');
+}
+
+function setUnifiedTab_(tabName){
+  const modal = document.getElementById('modalStatus');
+  if (!modal) return;
+
+  modal.dataset.tab = tabName;
+
+  document.querySelectorAll('.modal-top-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  document.querySelectorAll('#modalStatus .modal-panel').forEach(el => {
+    el.classList.toggle('active', el.dataset.panel === tabName);
+  });
+
+  const bodyEl = document.querySelector('#modalStatus .modal-body');
+  if (bodyEl) bodyEl.scrollTop = 0;
+}
+
+async function ensureUnifiedInputLoaded_(){
+  const st = window.__unifiedModalState;
+  if (!st || st.inputLoaded || st.inputLoading) return;
+
+  st.inputLoading = true;
+  if ($id('stMeta')) $id('stMeta').textContent = '案件情報を読込中...';
+
+  try {
+    const res = await gasCall_('api_getUnifiedModalInput', {
+      type: st.type,
+      key: st.key
+    });
+
+    if (!res || !res.ok) {
+      throw new Error(res?.error || '案件情報取得に失敗しました');
+    }
+
+    st.input = res.input || {};
+    st.inputLoaded = true;
+  } finally {
+    st.inputLoading = false;
+    if ($id('stMeta')) $id('stMeta').textContent = '';
+  }
 }
 
 /* =========================================================
@@ -472,13 +503,14 @@ function buildInputForm_(form, people, locGroups){
     { key:'最寄り', type:'text', placeholder:'最寄り、地域(渋谷 / 名古屋 / 博多 etc...)', value:'' },
     { key:'住所', type:'text', value:'' },
     { key:'作業内容', type:'text', value:'' },
+    { key:'台数', type:'text', value:'' },
   ]);
 
   buildFormSection_(right, '作業者情報', [
     { key:'監督者', type:'select', options:['ー', ...people], value:'' },
     { key:'管理者', type:'select', options:['未アサイン', ...people], value:'' },
     { key:'サポート', type:'checks', options: people, value:[] },
-    { key:'BP利用', type:'select', options:['有','無'], value:'' },
+    { key:'BP利用', type:'select', options:['無','有'], value:'' },
   ]);
 
   wrap.appendChild(left);
@@ -868,7 +900,7 @@ function buildFormSection_(containerEl, title, fields){
 }
 
 /* =========================================================
- *　Map
+ * Map
  * ======================================================= */
 
 function openMap(btn){
@@ -884,5 +916,172 @@ function openMap(btn){
     encodeURIComponent(addr);
 
   window.open(url, "_blank");
+}
+
+/* =========================================================
+ * Status option helpers
+ * ======================================================= */
+
+function findStatusOptionLabel_(statusMaster, big, mid, rawValue){
+  const groups = statusMaster?.groups || [];
+  const g = groups.find(x => String(x.big || '').trim() === String(big || '').trim());
+  if (!g) return String(rawValue || '').trim();
+
+  const m = (g.mids || []).find(x => String(x.mid || '').trim() === String(mid || '').trim());
+  if (!m) return String(rawValue || '').trim();
+
+  const s = String(rawValue || '').trim();
+  if (!s) return '';
+
+  const opt = (m.options || []).find(o =>
+    String(o.code || '').trim() === s ||
+    String(o.small || '').trim() === s ||
+    String(o.display || '').trim() === s
+  );
+
+  return String(opt?.small || opt?.display || s).trim();
+}
+
+function canSelectSeTaiouKanryo_(statusMaster, statusState){
+  const big = '案件ステータス';
+
+  const reportRaw = statusState?.[`ST_${big}__作業報告書`] || '';
+  const fbRaw     = statusState?.[`ST_${big}__FBアンケート`] || '';
+
+  const reportLabel = findStatusOptionLabel_(statusMaster, big, '作業報告書', reportRaw);
+  const fbLabel     = findStatusOptionLabel_(statusMaster, big, 'FBアンケート', fbRaw);
+
+  const reportOk = (reportLabel === '完了(Drive up済)');
+  const fbOk = (fbLabel === '完了' || fbLabel === '対応無');
+
+  return reportOk && fbOk;
+}
+
+function filterStatusOptionsByRule_(statusMaster, big, mid, options, statusState){
+  let list = [...(options || [])];
+
+  if (String(big || '').trim() === '案件ステータス' && String(mid || '').trim() === '案件対応') {
+    const allow = canSelectSeTaiouKanryo_(statusMaster, statusState);
+
+    if (!allow) {
+      list = list.filter(o => {
+        const label = String(o.small || o.display || o.code || '').trim();
+        return label !== 'SE対応完了';
+      });
+    }
+  }
+
+  return list;
+}
+
+function buildStatusSelectOptionsHtml_(statusMaster, big, mid, options, statusState, currentValue){
+  const list = filterStatusOptionsByRule_(statusMaster, big, mid, options, statusState);
+
+  const html = ['<option value=""></option>'];
+
+  list.forEach(o => {
+    const value = String(o.code || o.small || o.display || '').trim();
+    const label = String(o.display || o.small || value).trim();
+    const selected = (String(currentValue || '').trim() === value) ? ' selected' : '';
+    html.push(`<option value="${escAttr_(value)}"${selected}>${escHtml_(label)}</option>`);
+  });
+
+  return html.join('');
+}
+
+function refreshCaseTaiouSelectRule_(){
+  const modalSt = window.__statusModalState;
+  if (!modalSt?.master) return;
+
+  const form = $id('form-status');
+  if (!form) return;
+
+  const sel = form.querySelector('[name="ST_案件ステータス__案件対応"]');
+  if (!sel) return;
+
+  const groups = modalSt.master.groups || [];
+  const g = groups.find(x => String(x.big || '').trim() === '案件ステータス');
+  if (!g) return;
+
+  const m = (g.mids || []).find(x => String(x.mid || '').trim() === '案件対応');
+  if (!m) return;
+
+  const current = String(sel.value || '').trim();
+  const allow = canSelectSeTaiouKanryo_(modalSt.master, modalSt.values?.statusMap || {});
+
+  sel.innerHTML = buildStatusSelectOptionsHtml_(
+    modalSt.master,
+    '案件ステータス',
+    '案件対応',
+    m.options || [],
+    modalSt.values?.statusMap || {},
+    current
+  );
+
+  const exists = Array.from(sel.options).some(o => o.value === current);
+
+  if (exists) {
+    sel.value = current;
+  } else {
+    if (!allow) {
+      const removedValue = (m.options || []).find(o => {
+        const label = String(o.small || o.display || o.code || '').trim();
+        return label === 'SE対応完了';
+      })?.code || '';
+
+      if (current && current === removedValue) {
+        sel.value = '';
+        if (modalSt.values?.statusMap) {
+          delete modalSt.values.statusMap['ST_案件ステータス__案件対応'];
+        }
+      }
+    }
+  }
+}
+
+/* =========================================================
+ * Rule bind for status form
+ * ======================================================= */
+
+function bindStatusRuleEvents_(){
+  const modalSt = window.__statusModalState;
+  const form = $id('form-status');
+  if (!modalSt?.master || !form) return;
+
+  const reportSel = form.querySelector('[name="ST_案件ステータス__作業報告書"]');
+  const fbSel     = form.querySelector('[name="ST_案件ステータス__FBアンケート"]');
+  const caseSel   = form.querySelector('[name="ST_案件ステータス__案件対応"]');
+
+  const onChangeRule = (e) => {
+    const el = e.target;
+    if (!el || !el.name) return;
+
+    if (!modalSt.values) modalSt.values = { naGroups:{}, statusMap:{}, current_status_code:'' };
+    if (!modalSt.values.statusMap) modalSt.values.statusMap = {};
+
+    if (el.value) modalSt.values.statusMap[el.name] = el.value;
+    else delete modalSt.values.statusMap[el.name];
+
+    refreshCaseTaiouSelectRule_();
+    markUnifiedDirty_();
+    refreshUnifiedSaveState_();
+  };
+
+  if (reportSel && !reportSel.dataset.ruleBound) {
+    reportSel.addEventListener('change', onChangeRule);
+    reportSel.dataset.ruleBound = '1';
+  }
+
+  if (fbSel && !fbSel.dataset.ruleBound) {
+    fbSel.addEventListener('change', onChangeRule);
+    fbSel.dataset.ruleBound = '1';
+  }
+
+  if (caseSel && !caseSel.dataset.ruleBound) {
+    caseSel.addEventListener('change', onChangeRule);
+    caseSel.dataset.ruleBound = '1';
+  }
+
+  refreshCaseTaiouSelectRule_();
 }
 </script>

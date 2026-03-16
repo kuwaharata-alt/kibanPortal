@@ -336,6 +336,9 @@ function renderUnifiedStatus_(){
 
   const bodyEl = document.querySelector('#modalStatus .modal-body');
   if (bodyEl && window.__unifiedModalState.activeTab === 'status') bodyEl.scrollTop = 0;
+  
+  bindStatusRuleEvents_();
+  refreshUnifiedSaveState_();
 }
 
 /* =========================================================
