@@ -1,22 +1,30 @@
 <section id="panel-info" class="panel">
-  <div class="infohub-head">
-    <div class="infohub-right">
-      <div class="infohub-meta" id="infohubMeta">-</div>
+
+  <div class="panel-head">
+    <div class="panel-head-left"></div>
+    <div class="panel-head-right">
+      <div class="panel-meta" id="infohubMeta">-</div>
+      <div class="panel-err" id="infohubErr"></div>
     </div>
   </div>
-  <div class="infohub-toolbar">
-    <div class="infohub-tabs" id="infohubTabs"></div>
-  </div>
-  <div>
-    <input id="infohubSearch" class="infohub-input" placeholder="検索（全列）" />
-    <button id="infohubReload" class="infohub-btn">再読込</button>
+
+  <div class="panel-toolbar">
+    <div class="panel-toolbar-left">
+      <div class="infohub-tabs" id="infohubTabs"></div>
+    </div>
+
+    <div class="panel-toolbar-right">
+      <input id="infohubSearch" class="infohub-input" placeholder="検索（全列）" />
+      <button id="infohubReload" class="infohub-btn">再読込</button>
+    </div>
   </div>
 
-  <!-- 表 -->
-  <div class="infohub-tablewrap" style="margin-top:12px;">
-    <table class="infohub-table">
-      <thead id="infohubThead"></thead>
-      <tbody id="infohubTbody"></tbody>
-    </table>
+  <div class="card table-card">
+    <div class="infohub-tablewrap" style="margin-top:0;">
+      <table class="infohub-table">
+        <thead id="infohubThead"></thead>
+        <tbody id="infohubTbody"></tbody>
+      </table>
+    </div>
   </div>
 </section>

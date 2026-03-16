@@ -6,7 +6,6 @@
  * ======================================================= */
 
 window.PlanAppState = {
-  activeTab: 'summary',
   baseYm: '',
   months: 1,
   memberName: '',
@@ -21,7 +20,6 @@ window.PlanAppState = {
   holidaySet: new Set(),
   dirty: false,
   dayEditDate: '',
-  dayEditHalf: 'am',
 };
 
 window.__planInitialized = false;
@@ -324,6 +322,16 @@ async function openPlanPersonalModal_(){
   const modal = $pid('planPersonalModal');
   if (!modal) return;
 
+  if ($pid('planTargetMonth')) {
+    $pid('planTargetMonth').value = inputValueFromYm(window.PlanAppState.baseYm || getTodayYm());
+  }
+  if ($pid('planRange')) {
+    $pid('planRange').value = String(window.PlanAppState.months || 1);
+  }
+  if ($pid('planMember') && window.PlanAppState.memberName) {
+    $pid('planMember').value = window.PlanAppState.memberName;
+  }
+
   modal.classList.add('is-open');
   modal.setAttribute('aria-hidden', 'false');
 
@@ -382,16 +390,16 @@ async function loadPlanPersonal_(){
   setPlanMeta('表示しました');
 }
 
-function buildPlanCalendarMatrix_(baseYm, rows){
-
+function buildPlanCalendarMatrix_(baseYm, rows, months = 1){
   const map = {};
   (rows || []).forEach(r => {
     map[String(r.date)] = r;
   });
 
   const [y, m] = String(baseYm).split('/').map(Number);
+
   const first = new Date(y, m - 1, 1);
-  const last  = new Date(y, m, 0);
+  const last  = new Date(y, m - 1 + Number(months), 0);
 
   const start = new Date(first);
   start.setDate(first.getDate() - first.getDay());
@@ -410,7 +418,7 @@ function buildPlanCalendarMatrix_(baseYm, rows){
 
       week.push({
         date: key,
-        inMonth: d.getMonth() === (m - 1),
+        inMonth: d >= first && d <= last,
         row: map[key] || makeEmptyPlanRow_(key)
       });
 
@@ -430,7 +438,11 @@ function renderPlanPersonalCalendar_(rows){
   if (!head || !body) return;
 
   const ym = window.PlanAppState.baseYm || getTodayYm();
-  const weeks = buildPlanCalendarMatrix_(ym, rows);
+  const weeks = buildPlanCalendarMatrix_(
+    ym,
+    rows,
+    Number(window.PlanAppState.months || 1)
+  );
 
   const weekNames = ['日', '月', '火', '水', '木', '金', '土'];
 
@@ -480,35 +492,6 @@ function renderPlanPersonalCalendar_(rows){
   }).join('');
 
   bindPlanCalendarClicks_();
-}
-
-function renderPlanHalfSummary_(status, location, vacation, customer){
-  const st = nz(status);
-  const loc = nz(location);
-  const vac = nz(vacation);
-  const cus = nz(customer);
-
-  let html = '';
-
-  if (st === '休暇') {
-    html += `<span class="plan-chip is-vacation">${escHtml(vac || '休暇')}</span>`;
-  } else {
-    if (loc) {
-      html += `<span class="plan-chip ${getPlanTagClass_(loc)}">${escHtml(loc)}</span>`;
-    } else if (st) {
-      html += `<span class="plan-chip is-default">${escHtml(st)}</span>`;
-    }
-  }
-
-  if (cus) {
-    html += `<div class="plan-cal-customer">＠${escHtml(cus)}</div>`;
-  }
-
-  if (!html) {
-    html = `<span class="plan-cal-empty">未入力</span>`;
-  }
-
-  return html;
 }
 
 function bindPlanCalendarClicks_(){

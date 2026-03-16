@@ -660,34 +660,51 @@ function resolveCaseStatusByRule_(type, master, statusMap, naSet) {
 
   // ① アサイン系
   const assignState = resolveMidsRollupState_(master, statusMap, naSet, assignBig, getAssignRelatedMids_(master, type));
-
   if (assignState === '未着手') return '未アサイン';
   if (assignState === '対応中') return 'アサイン中';
 
-  // ② 詳細確認（案件確認の残り）
+  // ② 詳細確認
   const checkState = resolveMidsRollupState_(master, statusMap, naSet, checkBig, getDetailCheckMids_(master, type));
   if (checkState === '未着手' || checkState === '対応中') return '詳細確認中';
 
   // ③ 作業中
   const inState  = resolveBigRollupState_(master, statusMap, naSet, inBig);
   const outState = resolveBigRollupState_(master, statusMap, naSet, outBig);
-
-  if (!(inState === '完了' && outState === '完了')) {
-    return '作業中';
-  }
+  if (!(inState === '完了' && outState === '完了')) return '作業中';
 
   // ④ ドキュメント作成中
   const docState = resolveBigRollupState_(master, statusMap, naSet, docBig);
   if (docState !== '完了') return 'ﾄﾞｷｭﾒﾝﾄ作成中';
 
-  // ⑤ 案件クローズ前対応中
-  if (!hasBigInMaster_(master, caseStBig)) return 'ｸﾛｰｽﾞ前対応中';
+  // ⑤ 案件ステータス
+  if (!hasBigInMaster_(master, caseStBig)) return '案件クローズ前対応中';
 
-  const closePreState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, getPreCloseMids_(master, type));
-  if (closePreState !== '完了') return 'ｸﾛｰｽﾞ前対応中';
+  // 「案件対応」単独を見る
+  const caseTaiouState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['案件対応']);
 
-  // ⑥ 案件クローズ
-  const closeState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, getCloseMids_(master, type));
+  // 案件対応が完了なら、まず SE対応完了 を返す
+  if (caseTaiouState === '完了') {
+    const reportState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['作業報告書']);
+    const fbState     = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, ['FBアンケート']);
+
+    // 他がまだ残っている間は SE対応完了
+    if (!(reportState === '完了' && fbState === '完了')) {
+      return 'SE対応完了';
+    }
+  }
+
+  // ⑥ クローズ前対応
+  const preCloseMids = getPreCloseMids_(master, type);
+  const closePreState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, preCloseMids);
+  if (closePreState !== '完了') return '案件クローズ前対応中';
+
+  // ⑦ CLOSE
+  const closeMids = getCloseMids_(master, type);
+
+  // 案件クローズ中分類が無い運用なら、事前項目完了で CLOSE
+  if (!closeMids.length) return 'CLOSE';
+
+  const closeState = resolveMidsRollupState_(master, statusMap, naSet, caseStBig, closeMids);
   if (closeState === '完了') return 'CLOSE';
 
   return '案件クローズ前対応中';
@@ -789,6 +806,7 @@ function mergeStatesToRollup_(states) {
 
   if (arr.every(v => v === 'ー')) return 'ー';
   if (arr.every(v => v === '完了' || v === 'ー') && arr.some(v => v === '完了')) return '完了';
+  if (arr.every(v => v === '対応無' || v === 'ー')) return '完了';
   if (arr.every(v => v === '未着手' || v === 'ー')) return '未着手';
   if (arr.some(v => v === '対応中')) return '対応中';
   if (arr.some(v => v === '完了') && arr.some(v => v === '未着手')) return '対応中';
@@ -801,7 +819,9 @@ function normalizeSummaryStateStrict_(s) {
   if (!s) return '未着手';
 
   if (s === 'ー' || s === '-' || s === '—') return 'ー';
-  if (s.includes('対応無')) return 'ー';
+
+  // 対応無は完了扱い
+  if (s.includes('対応無')) return '完了';
 
   // 未着手系
   if (
