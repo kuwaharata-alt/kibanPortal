@@ -1,657 +1,623 @@
 <style>
 /* =========================================================
- * PLAN 専用 CSS
- * prefix: plan-
+ * PLAN
  * ======================================================= */
+
 #panel-plan{
-  --plan-bg: #f6f8fb;
-  --plan-card: #ffffff;
-  --plan-line: #d8dee8;
-  --plan-line-strong: #aeb8c7;
-  --plan-text: #1f2937;
-  --plan-sub: #6b7280;
-  --plan-head: #DDEBF7;
-  --plan-head-dark: #5b9445;
-  --plan-accent: #2563eb;
-  --plan-btn: #eef2f7;
-  --plan-btn-hover: #e5ebf3;
-  --plan-weekend: #d9d9d9;
-  --plan-sun: #d9d9d9;
-  --plan-sat: #d9d9d9;
-  --plan-shadow: 0 8px 24px rgba(15, 23, 42, .08);
-
-  color: var(--plan-text);
-  font-size: 14px;
-  line-height: 1.45;
-
-  min-width: 0;
-  min-height: 0;
-  height: 90%;
-  box-sizing: border-box;
-  padding: 12px 14px 14px;
-  overflow: hidden;
+  display:block;
 }
 
-/* 画面として表示される時だけ flex */
-#panel-plan.active{
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  height: 90%;
-}
-
-/* ===== Tabs ===== */
-.plan-tabs{
-  flex: 0 0 auto;
-  display: flex;
-  gap: 8px;
-  margin-bottom: 0;
-  margin-left: 10px;
-  position: relative;
-  z-index: 3;
-}
-
-.plan-tab{
-  appearance: none;
-  border: 1px solid var(--plan-head-dark);
-  border-bottom: 0;
-  background: #008080;
-  color: #fff;
-  padding: 10px 16px;
-  border-radius: 12px 12px 0 0;
-  cursor: pointer;
-  font-weight: 700;
-  transition: .15s ease;
-  position: relative;
-  top: 1px;
-}
-
-.plan-tab:hover{
-  opacity: .92;
-}
-
-.plan-tab.is-active{
-  background: #fff;
-  color: var(--plan-text);
-}
-
-/* ===== Panels ===== */
-.plan-panel{
-  display: none;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.plan-panel.is-active{
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-/* ===== Card ===== */
 .plan-card{
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--plan-card);
-  border: 1px solid var(--plan-line);
-  border-radius: 0 16px 16px 16px;
-  box-shadow: var(--plan-shadow);
-  overflow: hidden;
+  background:#fff;
+  border:1px solid #d6dee8;
+  border-radius:14px;
+  overflow:hidden;
 }
 
 .plan-card-head{
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px 10px;
-  border-bottom: 1px solid #edf1f6;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px 16px 10px;
+  border-bottom:1px solid #e5edf5;
 }
 
 .plan-card-title{
-  margin: 0;
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 700;
-}
-
-.plan-card-sub{
-  margin-top: 4px;
-  color: var(--plan-sub);
-  font-size: 12px;
+  margin:0;
+  font-size:18px;
+  font-weight:700;
+  color:#0f172a;
 }
 
 .plan-topbar-right{
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  min-width: 240px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
 }
 
 .plan-meta{
-  min-height: 14px;
-  font-size: 12px;
-  color: var(--plan-sub);
-  text-align: right;
+  font-size:12px;
+  color:#475569;
+  min-height:18px;
 }
 
 .plan-err{
-  min-height: 14px;
-  font-size: 12px;
-  color: #dc2626;
-  font-weight: 600;
-  text-align: right;
+  font-size:12px;
+  color:#dc2626;
+  min-height:18px;
 }
 
-/* ===== Toolbar ===== */
 .plan-toolbar{
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 14px;
-  padding: 12px 18px;
-  background: var(--plan-card);
-  border-bottom: 1px solid #edf1f6;
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  padding:12px 16px;
+  border-bottom:1px solid #e5edf5;
+  background:#f8fbff;
 }
 
 .plan-toolbar-group{
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 140px;
-}
-
-#planMemberBox{
-  min-width: 180px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
 }
 
 .plan-toolbar-actions{
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-left:auto;
 }
 
-/* ===== Labels / Inputs ===== */
 .plan-label{
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--plan-sub);
+  font-size:12px;
+  font-weight:700;
+  color:#475569;
 }
 
 .plan-input,
 .plan-select{
-  height: 36px;
-  min-width: 0;
-  padding: 0 10px;
-  border: 1px solid var(--plan-line);
-  border-radius: 10px;
-  background: #fff;
-  color: var(--plan-text);
-  outline: none;
-  box-sizing: border-box;
+  height:36px;
+  min-width:140px;
+  border:1px solid #cfd8e3;
+  border-radius:8px;
+  padding:0 10px;
+  background:#fff;
+  color:#111827;
+  box-sizing:border-box;
 }
 
 .plan-input:focus,
 .plan-select:focus{
-  border-color: var(--plan-accent);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+  outline:none;
+  border-color:#6aa9ff;
+  box-shadow:0 0 0 3px rgba(59,130,246,.12);
 }
 
 .plan-input-month{
-  width: 160px;
+  min-width:150px;
 }
 
-.plan-cell-input{
-  width: 100%;
-  min-width: 100%;
-  height: 32px;
-  border-radius: 8px;
-  font-size: 13px;
-}
-
-/* ===== Buttons ===== */
 .plan-btn{
-  height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--plan-line);
-  border-radius: 10px;
-  background: var(--plan-btn);
-  color: var(--plan-text);
-  font-weight: 600;
-  cursor: pointer;
-  transition: .15s ease;
+  height:36px;
+  padding:0 14px;
+  border:none;
+  border-radius:8px;
+  background:#2563eb;
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
 }
 
 .plan-btn:hover{
-  background: var(--plan-btn-hover);
+  filter:brightness(.98);
 }
 
 .plan-btn-primary{
-  background: var(--plan-head);
-  border-color: var(--plan-head-dark);
-  color: #fff;
+  background:#2563eb;
 }
 
-.plan-btn-primary:hover{
-  background: var(--plan-head-dark);
+.plan-btn-light{
+  background:#e2e8f0;
+  color:#1e293b;
 }
 
-.plan-btn-accent{
-  background: var(--plan-accent);
-  border-color: var(--plan-accent);
-  color: #fff;
-}
-
-.plan-btn-accent:hover{
-  filter: brightness(.96);
-}
-
-/* ===== Table wrap ===== */
 .plan-table-wrap{
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  overflow: auto;
-  position: relative;
-  background: #fff;
-  margin-left: 0;
-  border-left: 0;
+  width:100%;
+  overflow:auto;
+  background:#fff;
 }
 
-/* ===== Table base ===== */
 .plan-table{
-  width: max-content;
-  min-width: 90%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: fixed;
-  margin-left: 10px;
-  margin-right: 10px;
+  border-collapse:separate;
+  border-spacing:0;
+  width:max-content;
+  min-width:100%;
+  font-size:13px;
 }
 
 .plan-table th,
 .plan-table td{
-  border-right: 1px solid #333;
-  border-bottom: 1px solid #333;
-  vertical-align: middle;
-  box-sizing: border-box;
+  box-sizing:border-box;
+  border-right:1px solid #d6dee8;
+  border-bottom:1px solid #d6dee8;
+  padding:6px 8px;
+  background:#fff;
+  vertical-align:middle;
 }
 
-.plan-table th:first-child,
-.plan-table td:first-child{
-  border-left: 1px solid #333;
+.plan-table tr > *:first-child{
+  border-left:1px solid #d6dee8;
 }
 
-.plan-table thead tr:first-child th{
-  border-top: 1px solid #333;
+.plan-table thead tr:first-child > *{
+  border-top:1px solid #d6dee8;
 }
 
-.plan-table th{
-  text-align: center;
-  font-weight: 700;
-  padding: 8px 6px;
-  white-space: nowrap;
-}
-
-.plan-table td{
-  padding: 4px 6px;
-}
-
-/* =========================================================
- * 個人登録
- * ======================================================= */
-.plan-table-personal thead th{
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: #dbe8f6;
-  color: #111827;
-  font-weight: 700;
-}
-
-.plan-table-personal td{
-  height: 60px;
-  min-height: 60px;
-  max-height: 60px;
-  padding: 6px 8px;
-  font-size: 13px;
-  white-space: nowrap;
-  line-height: 1.35;
-  vertical-align: center;
-  overflow: hidden;
-}
-
-.plan-table-personal .plan-col-date,
-.plan-table-personal td.plan-date-cell{
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  font-weight: 700;
-  background: #f8fafc;
-}
-
-.plan-table-personal .plan-col-week,
-.plan-table-personal td.plan-week-cell{
-  width: 50px;
-  min-width: 50px;
-  max-width: 50px;
-  text-align: center;
-  background: #f8fafc;
-}
-
-.plan-table-personal .plan-col-status{
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-}
-
-.plan-table-personal .plan-col-location{
-  width: 80px;
-  min-width: 80px;
-  max-width: 80px;
-}
-
-.plan-table-personal .plan-col-vacation{
-  width: 80px;
-  min-width: 80px;
-  max-width: 80px;
-}
-
-.plan-table-personal .plan-col-customer{
-  width: 150px;
-  min-width: 150px;
-  max-width: 150px;
-}
-
-.plan-table-personal thead tr:nth-child(1) th{
-  position: sticky;
-  top: 0;
-  z-index: 8;
-  background: var(--plan-head);
-}
-
-.plan-table-personal thead tr:nth-child(2) th{
-  position: sticky;
-  top: 37px;
-  z-index: 7;
-  background: var(--plan-head);
-}
-
-.plan-table-personal th.plan-col-date,
-.plan-table-personal td.plan-date-cell{
-  position: sticky;
-  left: 0;
-  z-index: 10;
-  background: #f8fafc;
-  border-left: 1px solid #333;
-}
-
-.plan-table-personal th.plan-col-week,
-.plan-table-personal td.plan-week-cell{
-  position: sticky;
-  left: 120px;
-  z-index: 10;
-  background: #f8fafc;
-}
-
-.plan-table-personal thead tr:nth-child(1) th.plan-col-date,
-.plan-table-personal thead tr:nth-child(1) th.plan-col-week{
-  z-index: 24;
-  background: #dbe8f6;
-}
-
-.plan-table-personal thead tr:nth-child(2) th.plan-col-date,
-.plan-table-personal thead tr:nth-child(2) th.plan-col-week{
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 24;
-  background: #dbe8f6;
-  color: #111827;
-  font-weight: 700;
-  border-left: 1px solid #333;
-}
-
-
-/* =========================================================
- * 全体表示
- * ======================================================= */
 .plan-table-summary thead th{
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: #dbe8f6;
-  color: #111827;
-  font-weight: 700;
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:#dbe8f6;
+  color:#111827;
+  font-weight:700;
+  text-align:center;
 }
 
 .plan-table-summary td{
-  height: 60px;
-  min-height: 60px;
-  max-height: 60px;
-  padding: 6px 8px;
-  font-size: 13px;
-  white-space: normal;
-  line-height: 1.35;
-  vertical-align: center;
-  overflow: hidden;
+  height:60px;
+  min-height:60px;
+  max-height:60px;
+  font-size:13px;
+  white-space:normal;
+  line-height:1.35;
+  vertical-align:middle;
+  overflow:hidden;
 }
 
-.plan-table-summary .plan-summary-date,
+.plan-summary-date-merged{
+  min-width:110px;
+  width:110px;
+}
+
+.plan-summary-date,
 .plan-table-summary td.plan-summary-date{
-  width: 100px;
-  min-width: 100px;
-  max-width: 100px;
-  font-weight: 700;
-  background: #f8fafc;
+  width:80px;
+  min-width:80px;
+  max-width:80px;
+  font-weight:700;
+  background:#f8fafc;
 }
 
-.plan-table-summary .plan-summary-value,
+.plan-summary-value,
 .plan-table-summary td.plan-summary-value{
-  width: 50px;
-  min-width: 50px;
-  max-width: 50px;
-  text-align: center;
-  background: #f8fafc;
+  width:40px;
+  min-width:40px;
+  max-width:40px;
+  text-align:center;
+  background:#f8fafc;
 }
 
-.plan-table-summary .plan-summary-cell,
-.plan-table-summary td.plan-summary-cell{
-  width: 200px;
-  min-width: 200px;
-  max-width: 200px;
+.plan-summary-cell{
+  min-width:180px;
+  width:180px;
+  white-space:normal;
+  vertical-align:top;
 }
 
-.plan-table-summary th.plan-summary-date,
-.plan-table-summary td.plan-summary-date{
-  position: sticky;
-  left: 10px;
-  z-index: 10;
-  background: #f8fafc;
-  border-left: 1px solid #333;
-}
-
-.plan-table-summary th.plan-summary-value,
-.plan-table-summary td.plan-summary-value{
-  position: sticky;
-  left: 100px;
-  z-index: 10;
-  background: #f8fafc;
-}
-
-.plan-table-summary thead th.plan-summary-date,
-.plan-table-summary thead th.plan-summary-value{
-  z-index: 24;
-  background: #dbe8f6;
-}
-
-.plan-table-summary thead th.plan-summary-date-merged{
-  position: sticky;
-  top: 0;
-  left: 10px;
-  z-index: 24;
-  background: #dbe8f6;
-  color: #111827;
-  font-weight: 700;
-  border-left: 1px solid #333;
-}
-
-.plan-table-summary thead th.plan-summary-date-merged[colspan="2"]{
-  width: 172px;
-  min-width: 172px;
-  max-width: 172px;
-}
-
-/* ===== Row coloring ===== */
-.plan-row-sat td,
-.plan-row-sun td,
-.plan-row-holiday td{
-  background: var(--plan-weekend) !important;
-}
-
-.plan-row-sat td:first-child,
-.plan-row-sun td:first-child,
-.plan-row-holiday td:first-child{
-  font-weight: 700;
-}
-
-.plan-row-sat td.plan-date-cell,
-.plan-row-sat td.plan-week-cell,
-.plan-row-sat td.plan-summary-date,
-.plan-row-sat td.plan-summary-value,
-.plan-row-sun td.plan-date-cell,
-.plan-row-sun td.plan-week-cell,
-.plan-row-sun td.plan-summary-date,
-.plan-row-sun td.plan-summary-value,
-.plan-row-holiday td.plan-date-cell,
-.plan-row-holiday td.plan-week-cell,
-.plan-row-holiday td.plan-summary-date,
-.plan-row-holiday td.plan-summary-value{
-  background: var(--plan-weekend) !important;
-}
-
-
-
-/* ===== 全体表示タグ ===== */
-.plan-chip{
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 1.45;
-  font-weight: 700;
-  margin-right: 4px;
-  margin-bottom: 3px;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
-.plan-chip.is-default{
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.plan-chip.is-honsya{
-  background: #fff3e0;
-  color: #e65100;
-}
-
-.plan-chip.is-kashiwa{
-  background: #fdecea;
-  color: #b71c1c;
-}
-
-.plan-chip.is-yakura{
-  background: #e3f2fd;
-  color: #0d47a1;
-}
-
-.plan-chip.is-client{
-  background: #f3e5f5;
-  color: #6a1b9a;
-}
-
-.plan-chip.is-vacation{
-  background: #d9d9d9;
-  color: #c00000;
-}
-
-.plan-chip.is-vacation-weekend{
-  background: #d9d9d9;
-  color: #333333;
-}
-
-.plan-half-label{
-  font-weight: 700;
-  color: #6b7280;
-  margin-right: 4px;
-}
-
-/* ===== Utility ===== */
 .plan-text-center{
-  text-align: center;
-}
-
-.plan-text-right{
-  text-align: right;
+  text-align:center;
 }
 
 .plan-muted{
-  color: var(--plan-sub);
+  color:#94a3b8;
 }
 
-/* ===== Responsive ===== */
-@media (max-width: 1200px){
+.plan-chip{
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:0 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  line-height:1;
+  margin:1px 4px 1px 0;
+  background:#e2e8f0;
+  color:#334155;
+}
+
+.plan-chip.is-honsya{ background:#dbeafe; color:#1d4ed8; }
+.plan-chip.is-kashiwa{ background:#dcfce7; color:#15803d; }
+.plan-chip.is-yakura{ background:#ede9fe; color:#6d28d9; }
+.plan-chip.is-client{ background:#ffedd5; color:#c2410c; }
+.plan-chip.is-vacation{ background:#fee2e2; color:#b91c1c; }
+.plan-chip.is-vacation-weekend{ background:#e5e7eb; color:#6b7280; }
+.plan-chip.is-default{ background:#e2e8f0; color:#334155; }
+
+.plan-half-label{
+  font-weight:700;
+  color:#475569;
+}
+
+.plan-note{
+  color:#334155;
+  font-size:12px;
+}
+
+/* =========================================================
+ * Holiday row
+ * ======================================================= */
+
+.plan-row-holiday td{
+  background:#fff7f7;
+}
+
+.plan-row-sat td{
+  background:#f8fbff;
+}
+
+/* =========================================================
+ * Personal Calendar Modal
+ * ======================================================= */
+
+.plan-modal{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(15,23,42,.45);
+  z-index:2000;
+  padding:20px;
+  box-sizing:border-box;
+}
+
+.plan-modal.is-open{
+  display:flex;
+}
+
+.plan-modal-box{
+  width:min(1400px, 96vw);
+  height:min(860px, 92vh);
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  box-shadow:0 20px 60px rgba(15,23,42,.25);
+}
+
+.plan-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px 18px 12px;
+  border-bottom:1px solid #e5edf5;
+}
+
+.plan-modal-title{
+  margin:0;
+  font-size:18px;
+  font-weight:700;
+  color:#0f172a;
+}
+
+.plan-modal-sub{
+  margin-top:4px;
+  font-size:12px;
+  color:#64748b;
+}
+
+.plan-modal-close{
+  width:36px;
+  height:36px;
+  border:none;
+  border-radius:8px;
+  background:#f1f5f9;
+  color:#334155;
+  font-size:22px;
+  line-height:1;
+  cursor:pointer;
+}
+
+.plan-calendar-wrap{
+  flex:1;
+  overflow:auto;
+  background:#f8fafc;
+  padding:12px;
+  box-sizing:border-box;
+}
+
+.plan-cal-table{
+  width:100%;
+  min-width:980px;
+  border-collapse:separate;
+  border-spacing:0;
+  table-layout:fixed;
+  background:#fff;
+  border:1px solid #d6dee8;
+}
+
+.plan-cal-table th,
+.plan-cal-table td{
+  border-right:1px solid #d6dee8;
+  border-bottom:1px solid #d6dee8;
+  vertical-align:top;
+  box-sizing:border-box;
+}
+
+.plan-cal-table tr > *:last-child{
+  border-right:none;
+}
+
+.plan-cal-table tbody tr:last-child > *{
+  border-bottom:none;
+}
+
+.plan-cal-head{
+  background:#dbe8f6;
+  color:#111827;
+  text-align:center;
+  font-weight:700;
+  padding:10px 6px;
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+
+.plan-cal-day{
+  height:180px;
+  padding:8px;
+  background:#fff;
+}
+
+.plan-cal-day.is-other-month{
+  background:#f8fafc;
+  color:#94a3b8;
+}
+
+.plan-cal-day.plan-row-holiday{
+  background:#fff7f7;
+}
+
+.plan-cal-day.plan-row-sat{
+  background:#f8fbff;
+}
+
+.plan-cal-date{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  margin-bottom:8px;
+  font-weight:700;
+  color:#0f172a;
+}
+
+.plan-cal-date-num{
+  font-size:14px;
+}
+
+.plan-cal-week{
+  font-size:11px;
+  color:#64748b;
+}
+
+.plan-cal-half{
+  border:1px solid #dbe4ee;
+  border-radius:10px;
+  padding:6px;
+  background:#fff;
+  cursor:pointer;
+  margin-bottom:6px;
+  min-height:62px;
+  transition:.15s ease;
+}
+
+.plan-cal-half:last-child{
+  margin-bottom:0;
+}
+
+.plan-cal-half:hover{
+  border-color:#93c5fd;
+  background:#f8fbff;
+  box-shadow:0 0 0 3px rgba(59,130,246,.08);
+}
+
+.plan-cal-half-label{
+  font-size:11px;
+  font-weight:700;
+  color:#475569;
+  margin-bottom:4px;
+}
+
+.plan-cal-chip-wrap{
+  min-height:36px;
+}
+
+.plan-cal-customer{
+  margin-top:4px;
+  font-size:11px;
+  color:#475569;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.plan-cal-empty{
+  font-size:11px;
+  color:#94a3b8;
+}
+
+/* =========================================================
+ * Day Editor Modal
+ * ======================================================= */
+
+.plan-day-modal{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(15,23,42,.45);
+  z-index:2100;
+  padding:20px;
+  box-sizing:border-box;
+}
+
+.plan-day-modal.is-open{
+  display:flex;
+}
+
+.plan-day-modal-box{
+  width:min(920px, 96vw);
+  background:#fff;
+  border-radius:16px;
+  overflow:hidden;
+  box-shadow:0 20px 60px rgba(15,23,42,.25);
+}
+
+.plan-day-modal-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px 18px 12px;
+  border-bottom:1px solid #e5edf5;
+}
+
+.plan-day-modal-title{
+  margin:0;
+  font-size:18px;
+  font-weight:700;
+  color:#0f172a;
+}
+
+.plan-day-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  padding:16px;
+}
+
+.plan-day-card{
+  border:1px solid #dbe4ee;
+  border-radius:12px;
+  padding:14px;
+  background:#fbfdff;
+}
+
+.plan-day-card-title{
+  font-size:14px;
+  font-weight:700;
+  color:#0f172a;
+  margin-bottom:12px;
+}
+
+.plan-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  margin-bottom:10px;
+}
+
+.plan-day-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  padding:0 16px 16px;
+}
+
+@media (max-width: 900px){
+  .plan-day-grid{
+    grid-template-columns:1fr;
+  }
+
   .plan-toolbar{
-    align-items: stretch;
+    align-items:stretch;
   }
 
   .plan-toolbar-actions{
-    margin-left: 0;
-    width: 100%;
+    margin-left:0;
   }
 }
 
-@media (max-width: 768px){
-  .plan-toolbar-group,
-  #planMemberBox{
-    min-width: 100%;
-  }
+.plan-cal-half{
+  display:grid;
+  grid-template-columns:34px 1fr;
+  border:1px solid #cfd8e3;
+  border-radius:10px;
+  background:#fff;
+  cursor:pointer;
+  margin-bottom:6px;
+  min-height:58px;
+  overflow:hidden;
+  transition:.15s ease;
+}
 
-  .plan-toolbar-actions{
-    width: 100%;
-  }
+.plan-cal-half:last-child{
+  margin-bottom:0;
+}
 
-  .plan-btn{
-    flex: 1 1 auto;
-  }
+.plan-cal-half:hover{
+  border-color:#93c5fd;
+  background:#f8fbff;
+  box-shadow:0 0 0 3px rgba(59,130,246,.08);
+}
 
-  .plan-tab{
-    flex: 1 1 0;
-    text-align: center;
-  }
+.plan-cal-half-side{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-right:1px solid #cfd8e3;
+  background:#f8fafc;
+  font-size:12px;
+  font-weight:700;
+  color:#334155;
+  letter-spacing:.02em;
+}
 
-  .plan-card-head{
-    padding: 14px 14px 10px;
-  }
+.plan-cal-half-main{
+  padding:6px 8px;
+  display:flex;
+  align-items:center;
+}
 
-  .plan-topbar-right{
-    min-width: 0;
-  }
+.plan-cal-half-box{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.plan-cal-half-line{
+  min-height:18px;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+}
+
+.plan-cal-customer{
+  font-size:11px;
+  color:#475569;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.plan-cal-customer.is-empty{
+  min-height:14px;
+}
+
+.plan-cal-empty{
+  font-size:11px;
+  color:#94a3b8;
 }
 </style>
