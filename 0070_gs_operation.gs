@@ -6,6 +6,7 @@ function api_updateKado(payload) {
 
     const row = Number(payload?.row);
     const level = String(payload?.level ?? '');
+    const perm = String(payload?.perm ?? '');
     const status = String(payload?.status ?? '');
 
     if (!row || row < 2) return { ok: false, error: 'row が不正です' };
@@ -18,12 +19,13 @@ function api_updateKado(payload) {
 
     // 必須ヘッダー
     const idxCat = headers.indexOf('カテゴリ') + 1;
-    const idxLevel = headers.indexOf('レベル') + 1;
+    const idxLevel = headers.indexOf('稼働率') + 1;
+    const idxPerm = headers.indexOf('期間') + 1;
     const idxStat = headers.indexOf('稼働状況') + 1;
     const idxUpd = headers.indexOf('更新日') + 1;
 
-    if (!idxCat || !idxLevel || !idxStat || !idxUpd) {
-      return { ok: false, error: 'ヘッダーが不足しています（カテゴリ/レベル/稼働状況/更新日）' };
+    if (!idxCat || !idxLevel || !idxPerm || !idxStat || !idxUpd) {
+      return { ok: false, error: 'ヘッダーが不足しています（カテゴリ/稼働率/期間/稼働状況/更新日）' };
     }
 
     const now = new Date();
@@ -34,6 +36,7 @@ function api_updateKado(payload) {
 
     // 上書き（レベル・稼働状況・更新日）
     sh.getRange(row, idxLevel).setValue(level);
+    sh.getRange(row, idxPerm).setValue(perm);
     sh.getRange(row, idxStat).setValue(status);
     sh.getRange(row, idxUpd).setValue(nowStr);
 

@@ -43,12 +43,6 @@ function addMonths_(date, months) {
   return d;
 }
 
-function lastDayOfRange_(baseYm, months) {
-  const first = firstDayOfMonth_(baseYm);
-  const end = new Date(first.getFullYear(), first.getMonth() + Number(months), 0);
-  return end;
-}
-
 function enumerateDates_(baseYm, months) {
   const from = firstDayOfMonth_(baseYm);
   const to = lastDayOfRange_(baseYm, months);
