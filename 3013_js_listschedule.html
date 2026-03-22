@@ -63,8 +63,8 @@ async function loadCaseWbs() {
 }
 
 async function loadCaseWbs_(type) {
-  setCaseWbsErr_('');
-  setCaseWbsMeta_('読込中...');
+  setErr('');
+  setMeta('読込中...');
 
   try {
     const res = await gasCall_('api_getCaseWbsRows', type);
@@ -84,8 +84,8 @@ async function loadCaseWbs_(type) {
 
   } catch (err) {
     console.error(err);
-    setCaseWbsErr_(err && err.message ? err.message : String(err));
-    setCaseWbsMeta_('');
+    setErr(err && err.message ? err.message : String(err));
+    setMeta('');
     $cw('caseWbsRoot').innerHTML = '';
   }
 }
@@ -116,7 +116,7 @@ function renderCaseWbs_() {
 
   if (!rows.length) {
     root.innerHTML = `<div style="padding:16px;color:#64748b;">表示対象がありません。</div>`;
-    setCaseWbsMeta_(`0件`);
+    setMeta(`0件`);
     return;
   }
 
@@ -157,7 +157,7 @@ function renderCaseWbs_() {
   `;
 
   root.innerHTML = html;
-  setCaseWbsMeta_(`${rows.length}件 / ${CaseWbsState.type}`);
+  setMeta(`${rows.length}件 / ${CaseWbsState.type}`);
 }
 
 function renderCaseWbsCaseRows_(r, baseDate, days) {
@@ -372,16 +372,6 @@ function statusClassClient_(s) {
   if(v.includes('CLOSE')) return 'status-pill status-done';
 
   return '';
-}
-
-function setCaseWbsMeta_(msg) {
-  const el = $cw('caseWbsMeta');
-  if (el) el.textContent = String(msg || '');
-}
-
-function setCaseWbsErr_(msg) {
-  const el = $cw('caseWbsErr');
-  if (el) el.textContent = String(msg || '');
 }
 
 function gasCall_(fn, ...args) {

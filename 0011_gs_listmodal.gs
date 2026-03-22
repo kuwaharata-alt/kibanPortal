@@ -1042,9 +1042,6 @@ function api_getUnifiedCaseModal(req) {
     const key = norm_(req.key || req.mitsuNo);
     if (!key) return { ok: false, error: 'key が空です' };
 
-    const includeDetail = req.includeDetail === true;
-    const includeInput = req.includeInput === true;
-
     const statusMasterRes = getStatusMasterCached_(type);
     if (!statusMasterRes.ok) {
       return { ok: false, error: statusMasterRes.error || 'ステータスマスタ取得失敗' };
@@ -1055,36 +1052,28 @@ function api_getUnifiedCaseModal(req) {
       return { ok: false, error: caseStatusRes.error || '案件ステータス取得失敗' };
     }
 
-    let detail = null;
-    if (includeDetail) {
-      const detailRes = api_getCaseDetail(type, key);
-      if (!detailRes.ok) {
-        return { ok: false, error: detailRes.error || '詳細取得失敗' };
-      }
-      detail = detailRes.data || {};
+    const detailRes = api_getCaseDetail(type, key);
+    if (!detailRes.ok) {
+      return { ok: false, error: detailRes.error || '詳細取得失敗' };
     }
 
-    let input = null;
-    if (includeInput) {
-      const inputRes = api_getCaseByKey({ type, key });
-      if (!inputRes.ok) {
-        return { ok: false, error: inputRes.error || '案件情報取得失敗' };
-      }
-      input = inputRes.data || {};
+    const inputRes = api_getCaseByKey({ type, key });
+    if (!inputRes.ok) {
+      return { ok: false, error: inputRes.error || '案件情報取得失敗' };
     }
 
     return {
       ok: true,
       type,
       key,
-      detail,
+      detail: detailRes.data || {},
       statusMaster: statusMasterRes,
       caseStatus: {
         statusMap: caseStatusRes.statusMap || {},
         naGroups: caseStatusRes.naGroups || {},
         currentCode: caseStatusRes.currentCode || ''
       },
-      input
+      input: inputRes.data || {}
     };
   } catch (e) {
     return { ok: false, error: String(e) };

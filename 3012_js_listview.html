@@ -124,8 +124,13 @@ function linkHtml_(url){
 function renderUnifiedStatus_(){
   const st = window.__unifiedModalState;
   const master = st.statusMaster || { groups:[], naOptions:['対応有','対応無'] };
-  const values = st.caseStatus || { statusMap:{}, naGroups:{}, currentCode:'' };
-
+  const src = window.__statusModalState?.values || { naGroups:{}, statusMap:{}, current_status_code:'' };
+  const values = {
+    naGroups: { ...(src.naGroups || {}) },
+    statusMap: { ...(src.statusMap || {}) },
+    current_status_code: src.current_status_code || ''
+  };
+  
   window.__statusModalState = {
     master: master,
     values: {
@@ -202,11 +207,13 @@ function renderUnifiedStatus_(){
       });
 
       naSel.addEventListener('change', () => {
-        v.naGroups[naKey] = naSel.value;
+        const nextVal = naSel.value;
+        v.naGroups[naKey] = nextVal;
 
-        if (naSel.value === '対応無') {
+        if (nextVal === '対応無') {
           (g.mids || []).forEach(m => {
-            v.statusMap[`ST_${big}__${m.mid}`] = 'ー';
+            const k = `ST_${big}__${m.mid}`;
+            v.statusMap[k] = 'ー';
           });
         } else {
           (g.mids || []).forEach(m => {
@@ -215,7 +222,8 @@ function renderUnifiedStatus_(){
           });
         }
 
-        renderUnifiedStatus_();
+        applyNaToSection_(sec, g, v);
+
         markUnifiedDirty_();
         refreshUnifiedSaveState_();
       });
@@ -341,27 +349,58 @@ function renderUnifiedStatus_(){
   refreshUnifiedSaveState_();
 }
 
-/* =========================================================
- * Render : Input
- * ======================================================= */
+function applyNaToSection_(sec, g, values){
+  if (!sec || !g) return;
 
-async function renderUnifiedInput_(){
-  const st = window.__unifiedModalState;
-  const form = $id('form-input');
-  if (!form) return;
+  const big = g.big;
+  const naKey = `NA_${big}`;
+  const naVal = values?.naGroups?.[naKey] || '対応有';
+  const isNA = naVal === '対応無';
 
-  if (form.children.length === 0) {
-    const [people, locGroups] = await Promise.all([
-      fetchMemberMaster_(),
-      fetchLocationMaster_()
-    ]);
-
-    buildInputForm_(form, people, locGroups);
-    st.inputFormBuilt = true;
+  const block = sec.querySelector('[data-st="block"]');
+  if (block) {
+    block.classList.toggle('st-disabled', isNA);
   }
 
-  clearInputForm_();
-  fillModalFromRow(st.input || {});
+  (g.mids || []).forEach(m => {
+    const stKey = `ST_${big}__${m.mid}`;
+    const el = sec.querySelector(`[name="${CSS.escape(stKey)}"]`);
+    if (!el) return;
+
+    const isDate = isDateMid_(big, m.mid);
+
+    if (isNA) {
+      if (isDate) {
+        el.value = '';
+      } else {
+        el.value = '';
+      }
+      el.disabled = true;
+      el.classList.add('is-disabled');
+    } else {
+      el.disabled = false;
+      el.classList.remove('is-disabled');
+
+      if (isDate) {
+        const cur = values?.statusMap?.[stKey] || '';
+        el.value = String(cur).includes('/') ? ymdSlashToDash_(cur) : String(cur || '');
+      } else {
+        el.value = values?.statusMap?.[stKey] || '';
+      }
+    }
+  });
+
+  const cKey = `CM_${big}`;
+  const ta = sec.querySelector(`[name="${CSS.escape(cKey)}"]`);
+  if (ta) {
+    if (isNA) {
+      ta.disabled = true;
+      ta.classList.add('is-disabled');
+    } else {
+      ta.disabled = false;
+      ta.classList.remove('is-disabled');
+    }
+  }
 }
 
 </script>

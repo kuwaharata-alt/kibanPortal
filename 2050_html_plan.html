@@ -1,13 +1,4 @@
 <section id="panel-plan" class="panel">
-
-  <div class="panel-head">
-    <div class="panel-head-left"></div>
-    <div class="panel-head-right">
-      <div class="panel-meta" id="planMeta"></div>
-      <div class="panel-err" id="planErr"></div>
-    </div>
-  </div>
-
   <div class="panel-toolbar">
     <div class="panel-toolbar-left">
       <div class="plan-toolbar-group">
@@ -39,3 +30,122 @@
     </div>
   </div>
 </section>
+
+<!-- =========================================================
+  個人登録モーダル（リメイク版）
+========================================================= -->
+<div id="planPersonalModal" class="plan-modal" aria-hidden="true">
+  <div class="plan-modal-box plan-modal-box-remake">
+    <div class="plan-modal-stickybar">
+      <div class="plan-modal-head">
+        <div>
+          <h3 class="plan-modal-title">個人予定登録</h3>
+          <div class="plan-modal-sub">日ごとの AM / PM をクリックして編集</div>
+          <div class="plan-modal-sub">終日同じ予定の場合はAMのみ登録</div>
+        </div>
+        <div class="plan-modal-head-actions">
+          <button type="button" class="plan-btn plan-btn-light" id="btnClosePlanPersonal">閉じる</button>
+          <button type="button" class="plan-btn plan-btn-primary" id="btnPlanSavePersonal">保存</button>
+        </div>
+      </div>
+
+      <div class="plan-modal-toolbar">
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planMember">メンバー</label>
+          <select id="planMember" class="plan-select"></select>
+        </div>
+
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planTargetMonth">対象月</label>
+          <input type="month" id="planTargetMonth" class="plan-input plan-input-month">
+        </div>
+
+        <div class="plan-toolbar-group">
+          <label class="plan-label" for="planRange">表示期間</label>
+          <select id="planRange" class="plan-select">
+            <option value="1" selected>1か月</option>
+            <option value="2">2か月</option>
+            <option value="3">3か月</option>
+          </select>
+        </div>
+
+        <div class="plan-modal-statusline" id="planModalStatusLine"></div>
+      </div>
+    </div>
+
+    <div class="plan-calendar-wrap plan-calendar-wrap-remake">
+      <table class="plan-remake-table">
+        <thead id="planCalendarHead"></thead>
+        <tbody id="planCalendarBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+  日別編集モーダル
+========================================================= -->
+<div id="planDayModal" class="plan-day-modal" aria-hidden="true">
+  <div class="plan-day-modal-box">
+    <div class="plan-day-modal-head">
+      <h3 class="plan-day-modal-title" id="planDayModalTitle">予定編集</h3>
+      <button type="button" class="plan-modal-close" id="btnClosePlanDayModal">×</button>
+    </div>
+
+    <div class="plan-day-grid">
+      <div class="plan-day-card">
+        <div class="plan-day-card-title">AM</div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayAmStatus">ステータス</label>
+          <select id="planDayAmStatus" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayAmLocation">勤務場所</label>
+          <select id="planDayAmLocation" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayAmVacation">休暇</label>
+          <select id="planDayAmVacation" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayAmCustomer">対応顧客名</label>
+          <input type="text" id="planDayAmCustomer" class="plan-input">
+        </div>
+      </div>
+
+      <div class="plan-day-card">
+        <div class="plan-day-card-title">PM</div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayPmStatus">ステータス</label>
+          <select id="planDayPmStatus" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayPmLocation">勤務場所</label>
+          <select id="planDayPmLocation" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayPmVacation">休暇</label>
+          <select id="planDayPmVacation" class="plan-select"></select>
+        </div>
+
+        <div class="plan-field">
+          <label class="plan-label" for="planDayPmCustomer">対応顧客名</label>
+          <input type="text" id="planDayPmCustomer" class="plan-input">
+        </div>
+      </div>
+    </div>
+
+    <div class="plan-day-actions">
+      <button type="button" class="plan-btn plan-btn-light" id="btnPlanDayClear">クリア</button>
+      <button type="button" class="plan-btn plan-btn-light" id="btnPlanDayCopyAmToPm">AM→PMコピー</button>
+      <button type="button" class="plan-btn plan-btn-primary" id="btnPlanDaySave">反映</button>
+    </div>
+  </div>
+</div>

@@ -245,4 +245,49 @@ function toggleTaskMemberCheck_(cb, no, memberName){
     })
     .api_updateTaskMemberCheck(no, memberName, checked);
 }
+
+function saveTask(){
+  const btn = document.getElementById('taskEntrySubmit');
+
+  const data = {
+    task: document.getElementById('taskName')?.value?.trim() || '',
+    link: document.getElementById('taskLink')?.value?.trim() || '',
+    date: document.getElementById('taskDate')?.value || ''
+  };
+
+  if (!data.task) {
+    alert('タスクを入力してください');
+    document.getElementById('taskName')?.focus();
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+
+  google.script.run
+    .withSuccessHandler(function(res){
+      if (btn) btn.disabled = false;
+
+      if (!res || !res.ok) {
+        alert(res?.error || '登録に失敗しました');
+        return;
+      }
+
+      const nameEl = document.getElementById('taskName');
+      const linkEl = document.getElementById('taskLink');
+      const dateEl = document.getElementById('taskDate');
+
+      if (nameEl) nameEl.value = '';
+      if (linkEl) linkEl.value = '';
+      if (dateEl) dateEl.value = '';
+
+      loadTask();
+      nameEl?.focus();
+    })
+    .withFailureHandler(function(err){
+      if (btn) btn.disabled = false;
+      console.error('api_addTask error', err);
+      alert('登録に失敗しました');
+    })
+    .api_addTask(data);
+}
 </script>

@@ -51,7 +51,7 @@ async function openStatus(key, customer=''){
     return;
   }
 
-  await openUnifiedModal(key, customer)
+ await openUnifiedModal(key, customer)
     .then(() => switchUnifiedTab_('status'))
     .catch(err => {
       console.error(err);
@@ -63,8 +63,8 @@ async function openStatus(key, customer=''){
  * Open / Close
  * ======================================================= */
 
-async function openUnifiedModal(caseKey, customer){
-  const modal = document.getElementById('modalStatus');
+async function openUnifiedModal(caseKey, customer) {
+  const modal = $id('modalStatus');
   if (!modal) throw new Error('modalStatus not found');
 
   const type = normalizeCaseTypeClient_(window.AppState?.type || 'SV');
@@ -75,14 +75,14 @@ async function openUnifiedModal(caseKey, customer){
   modal.dataset.type = type;
   modal.dataset.tab = 'detail';
 
-  if (document.getElementById('stTitle')) {
-    document.getElementById('stTitle').textContent = `【${caseKey}】${customer}`;
+  if ($id('stTitle')) {
+    $id('stTitle').textContent = `【${caseKey}】${customer}`;
   }
-  if (document.getElementById('stMeta')) {
-    document.getElementById('stMeta').textContent = '読込中...';
+  if ($id('stMeta')) {
+    $id('stMeta').textContent = '読込中...';
   }
-  if (document.getElementById('stErr')) {
-    document.getElementById('stErr').textContent = '';
+  if ($id('stErr')) {
+    $id('stErr').textContent = '';
   }
 
   window.__unifiedModalState = {
@@ -97,43 +97,55 @@ async function openUnifiedModal(caseKey, customer){
       currentCode: ''
     },
     input: null,
+    loaded: false,
+    activeTab: 'detail',
+    dirty: false,
+    statusFormBuilt: false,
     inputFormBuilt: false
   };
 
-  try {
-    const res = await gasCall_('api_getUnifiedCaseModal', {
-      type,
-      key: caseKey
-    });
+  clearUnifiedPanels_();
+  switchUnifiedTab_('detail', true);
 
-    if (!res || !res.ok) {
-      throw new Error(res?.error || '読込に失敗しました');
+  const res = await fetchUnifiedCaseModal_(type, caseKey);
+
+  if (!res || !res.ok) {
+    if ($id('stMeta')) {
+      $id('stMeta').textContent = '';
     }
-
-    const st = window.__unifiedModalState;
-    st.detail = res.detail || {};
-    st.statusMaster = res.statusMaster || null;
-    st.caseStatus = res.caseStatus || { statusMap:{}, naGroups:{}, currentCode:'' };
-    st.input = res.input || {};
-
-    renderUnifiedDetail_();
-    renderUnifiedStatus_();
-    await renderUnifiedInput_();
-
-    setUnifiedTab_('detail');
-
-    if (document.getElementById('stMeta')) {
-      document.getElementById('stMeta').textContent = '';
+    if ($id('stErr')) {
+      $id('stErr').textContent = res?.error || '読込失敗';
     }
-  } catch (err) {
-    console.error(err);
-    if (document.getElementById('stErr')) {
-      document.getElementById('stErr').textContent = err?.message || String(err);
-    }
-    if (document.getElementById('stMeta')) {
-      document.getElementById('stMeta').textContent = '';
-    }
+    throw new Error(res?.error || '読込失敗');
   }
+
+  const st = window.__unifiedModalState;
+
+  st.detail = res.detail || {};
+  st.statusMaster = res.statusMaster || {
+    groups: [],
+    naOptions: ['対応有', '対応無']
+  };
+  st.caseStatus = {
+    statusMap: { ...(res.caseStatus?.statusMap || {}) },
+    naGroups: { ...(res.caseStatus?.naGroups || {}) },
+    currentCode: res.caseStatus?.currentCode || ''
+  };
+  st.input = normalizeInputRow_(res.input || {});
+  st.loaded = true;
+
+  renderUnifiedDetail_();
+  renderUnifiedStatus_();
+  await renderUnifiedInput_();
+
+  bindUnifiedDirtyEvents_();
+  refreshUnifiedSaveState_();
+
+  if ($id('stMeta')) {
+    $id('stMeta').textContent = '';
+  }
+
+  return true;
 }
 
 function closeUnifiedModal_(){
@@ -181,7 +193,12 @@ function fetchUnifiedCaseModal_(type, key){
     google.script.run
       .withSuccessHandler(resolve)
       .withFailureHandler(reject)
-      .api_getUnifiedCaseModal({ type, key });
+      .api_getUnifiedCaseModal({
+        type,
+        key,
+        includeDetail: true,
+        includeInput: true
+      });
   });
 }
 
@@ -198,7 +215,7 @@ function saveUnifiedCaseModalApi_(payload){
  * Tabs
  * ======================================================= */
 
-function switchUnifiedTab_(tab, force=false){
+async function switchUnifiedTab_(tab, force=false){
   const modal = $id('modalStatus');
   if (!modal) return;
 
@@ -219,48 +236,15 @@ function switchUnifiedTab_(tab, force=false){
   if (pDetail) pDetail.classList.toggle('is-hidden', tab !== 'detail');
   if (pStatus) pStatus.classList.toggle('is-hidden', tab !== 'status');
   if (pInput)  pInput.classList.toggle('is-hidden', tab !== 'input');
-}
 
-function setUnifiedTab_(tabName){
-  const modal = document.getElementById('modalStatus');
-  if (!modal) return;
+  if (!st.loaded) return;
 
-  modal.dataset.tab = tabName;
-
-  document.querySelectorAll('.modal-top-tab').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
-  });
-
-  document.querySelectorAll('#modalStatus .modal-panel').forEach(el => {
-    el.classList.toggle('active', el.dataset.panel === tabName);
-  });
-
-  const bodyEl = document.querySelector('#modalStatus .modal-body');
-  if (bodyEl) bodyEl.scrollTop = 0;
-}
-
-async function ensureUnifiedInputLoaded_(){
-  const st = window.__unifiedModalState;
-  if (!st || st.inputLoaded || st.inputLoading) return;
-
-  st.inputLoading = true;
-  if ($id('stMeta')) $id('stMeta').textContent = '案件情報を読込中...';
-
-  try {
-    const res = await gasCall_('api_getUnifiedModalInput', {
-      type: st.type,
-      key: st.key
-    });
-
-    if (!res || !res.ok) {
-      throw new Error(res?.error || '案件情報取得に失敗しました');
-    }
-
-    st.input = res.input || {};
-    st.inputLoaded = true;
-  } finally {
-    st.inputLoading = false;
-    if ($id('stMeta')) $id('stMeta').textContent = '';
+  if (tab === 'detail') {
+    renderUnifiedDetail_?.();
+  } else if (tab === 'status') {
+    renderUnifiedStatus_?.();
+  } else if (tab === 'input') {
+    await renderUnifiedInput_?.();
   }
 }
 
@@ -900,7 +884,7 @@ function buildFormSection_(containerEl, title, fields){
 }
 
 /* =========================================================
- * Map
+ *　Map
  * ======================================================= */
 
 function openMap(btn){
@@ -1083,5 +1067,24 @@ function bindStatusRuleEvents_(){
   }
 
   refreshCaseTaiouSelectRule_();
+}
+
+async function renderUnifiedInput_(){
+  const st = window.__unifiedModalState;
+  const form = $id('form-input');
+  if (!form) return;
+
+  if (form.children.length === 0) {
+    const [people, locGroups] = await Promise.all([
+      fetchMemberMaster_(),
+      fetchLocationMaster_()
+    ]);
+
+    buildInputForm_(form, people, locGroups);
+    st.inputFormBuilt = true;
+  }
+
+  clearInputForm_();
+  fillModalFromRow(st.input || {});
 }
 </script>

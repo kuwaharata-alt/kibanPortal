@@ -1,5 +1,5 @@
 <script>
-/** ===== AppState: 1個だけに統一 ===== */
+  /** ===== AppState: 1個だけに統一 ===== */
 window.AppState = window.AppState || {
   type: 'SV',
   headers: [],
@@ -33,13 +33,19 @@ const LS_KEY_PANEL  = 'activePanel';
 const LS_KEY_TYPE   = 'activeType';
 
 function setErr(msg){
-  const el = document.getElementById('err');
-  if (el) el.textContent = msg || '';
+  const el = document.getElementById('meta');
+  if (!el) return;
+
+  el.textContent = msg || '';
+  el.classList.add('is-error');
 }
 
 function setMeta(msg){
   const el = document.getElementById('meta');
-  if (el) el.textContent = msg || '';
+  if (!el) return;
+
+  el.textContent = msg || '';
+  el.classList.remove('is-error');
 }
 
 function getPanelFromHash(){
@@ -264,4 +270,29 @@ function renderLoginUser_(){
   el.textContent = `ログイン：${u.name}`;
 }
 
+function setTitleShort_(){
+  const el = document.getElementById('pageTitle');
+  if (!el) return;
+
+  const active = document.querySelector('.panel.active');
+  const panelId = active?.id || '';
+
+  const type = localStorage.getItem(LS_KEY_TYPE) || window.AppState.type || 'SV';
+
+  const titleMap = {
+    'panel-list': type === 'CL' ? '案件管理表（CL）' : '案件管理表（SV）',
+    'panel-rule': 'ルール管理',
+    'panel-task': 'タスク管理',
+    'panel-plan': '予定管理',
+    'panel-info': 'Info Hub',
+    'panel-operation': '稼働状況',
+    'panel-wbs': '案件全体WBS',
+    'panel-link': 'リンク集',
+    'panel-manual': 'マニュアル一覧'
+  };
+
+  el.textContent = titleMap[panelId] || 'SOL推進部基盤Grポータル';
+}
+
+window.setTitleShort_ = setTitleShort_;
 </script>

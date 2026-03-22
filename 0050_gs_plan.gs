@@ -148,8 +148,11 @@ function api_saveMemberMonthPlan(payload) {
   const required = [
     '日付','曜日',
     'AM_ステータス','AM_勤務場所','AM_休暇','AM_対応顧客名',
-    'PM_ステータス','PM_勤務場所','PM_休暇','PM_対応顧客名'
+    'AM_eventId','AM_syncStatus','AM_syncAt',
+    'PM_ステータス','PM_勤務場所','PM_休暇','PM_対応顧客名',
+    'PM_eventId','PM_syncStatus','PM_syncAt'
   ];
+
   required.forEach(h => {
     if (!hm[h]) throw new Error('個人シートのヘッダー不足: ' + h);
   });
@@ -165,6 +168,9 @@ function api_saveMemberMonthPlan(payload) {
     });
   }
 
+  // 既存eventIdも含めて同期用データを作る
+  const syncSourceRows = [];
+
   rows.forEach(obj => {
     const key = String(obj.date || '').trim();
     if (!key) return;
@@ -177,20 +183,125 @@ function api_saveMemberMonthPlan(payload) {
 
     sh.getRange(row, hm['日付']).setValue(key);
     sh.getRange(row, hm['曜日']).setValue(obj.week || '');
+
     sh.getRange(row, hm['AM_ステータス']).setValue(obj.amStatus || '');
     sh.getRange(row, hm['AM_勤務場所']).setValue(obj.amLocation || '');
     sh.getRange(row, hm['AM_休暇']).setValue(obj.amVacation || '');
     sh.getRange(row, hm['AM_対応顧客名']).setValue(obj.amCustomer || '');
+
     sh.getRange(row, hm['PM_ステータス']).setValue(obj.pmStatus || '');
     sh.getRange(row, hm['PM_勤務場所']).setValue(obj.pmLocation || '');
     sh.getRange(row, hm['PM_休暇']).setValue(obj.pmVacation || '');
     sh.getRange(row, hm['PM_対応顧客名']).setValue(obj.pmCustomer || '');
+
+    syncSourceRows.push({
+      sheetRow: row,
+      date: key,
+      week: obj.week || '',
+
+      amStatus: obj.amStatus || '',
+      amLocation: obj.amLocation || '',
+      amVacation: obj.amVacation || '',
+      amCustomer: obj.amCustomer || '',
+      amEventId: String(sh.getRange(row, hm['AM_eventId']).getValue() || '').trim(),
+
+      pmStatus: obj.pmStatus || '',
+      pmLocation: obj.pmLocation || '',
+      pmVacation: obj.pmVacation || '',
+      pmCustomer: obj.pmCustomer || '',
+      pmEventId: String(sh.getRange(row, hm['PM_eventId']).getValue() || '').trim(),
+    });
   });
 
-  // ← 保存後に予定管理表へ反映
+  // カレンダー同期
+  const syncResults = syncMemberMonthPlanToCalendar_(memberName, syncSourceRows);
+
+  // eventId / syncStatus / syncAt 書き戻し
+  syncResults.forEach(r => {
+    const row = r.sheetRow;
+    if (!row) return;
+
+    sh.getRange(row, hm['AM_eventId']).setValue(r.am?.eventId || '');
+    sh.getRange(row, hm['AM_syncStatus']).setValue(r.am?.syncStatus || '');
+    sh.getRange(row, hm['AM_syncAt']).setValue(r.am?.syncAt || '');
+
+    sh.getRange(row, hm['PM_eventId']).setValue(r.pm?.eventId || '');
+    sh.getRange(row, hm['PM_syncStatus']).setValue(r.pm?.syncStatus || '');
+    sh.getRange(row, hm['PM_syncAt']).setValue(r.pm?.syncAt || '');
+  });
+
+  // 保存後に予定管理表へ反映
   upsertMemberToSummary_(memberName, rows);
 
-  return { ok: true };
+  return {
+    ok: true,
+    syncResults,
+  };
+}
+
+function api_saveMemberMonthPlanFast(payload) {
+  try {
+    const memberName = String(payload.memberName || '').trim();
+    const rows = payload.rows || [];
+    if (!memberName) throw new Error('memberName が空です');
+
+    const sh = getPlanSheet_(memberName);
+    const hm = getHeaderMap_(sh, 1);
+
+    const required = [
+      '日付','曜日',
+      'AM_ステータス','AM_勤務場所','AM_休暇','AM_対応顧客名',
+      'PM_ステータス','PM_勤務場所','PM_休暇','PM_対応顧客名'
+    ];
+
+    required.forEach(h => {
+      if (!hm[h]) throw new Error('個人シートのヘッダー不足: ' + h);
+    });
+
+    const lastRow = sh.getLastRow();
+    const existingMap = {};
+
+    if (lastRow > 1) {
+      const vals = sh.getRange(2, hm['日付'], lastRow - 1, 1).getValues();
+      vals.forEach((r, i) => {
+        const key = formatDateKey_(r[0]);
+        if (key) existingMap[key] = i + 2;
+      });
+    }
+
+    rows.forEach(obj => {
+      const key = String(obj.date || '').trim();
+      if (!key) return;
+
+      let row = existingMap[key];
+      if (!row) {
+        row = sh.getLastRow() + 1;
+        existingMap[key] = row;
+      }
+
+      sh.getRange(row, hm['日付']).setValue(key);
+      sh.getRange(row, hm['曜日']).setValue(obj.week || '');
+      sh.getRange(row, hm['AM_ステータス']).setValue(obj.amStatus || '');
+      sh.getRange(row, hm['AM_勤務場所']).setValue(obj.amLocation || '');
+      sh.getRange(row, hm['AM_休暇']).setValue(obj.amVacation || '');
+      sh.getRange(row, hm['AM_対応顧客名']).setValue(obj.amCustomer || '');
+      sh.getRange(row, hm['PM_ステータス']).setValue(obj.pmStatus || '');
+      sh.getRange(row, hm['PM_勤務場所']).setValue(obj.pmLocation || '');
+      sh.getRange(row, hm['PM_休暇']).setValue(obj.pmVacation || '');
+      sh.getRange(row, hm['PM_対応顧客名']).setValue(obj.pmCustomer || '');
+    });
+
+    upsertMemberToSummary_(memberName, rows);
+
+    return { ok: true };
+
+  } catch (e) {
+    console.error(e);
+    return {
+      ok: false,
+      error: e.message || String(e),
+    };
+  }
 }
 
 /** ======================================================================
