@@ -179,19 +179,23 @@ function syncOnePlanRowToCalendar_(cal, memberName, row) {
     return out;
   }
 
-  const amPayload = buildCalendarPayload_(row, 'am');
-  const pmPayload = buildCalendarPayload_(row, 'pm');
-
-  const amRes = upsertCalendarEvent_(cal, row.amEventId, amPayload);
-  const pmRes = upsertCalendarEvent_(cal, row.pmEventId, pmPayload);
+  const payload = buildCalendarPayload_(row, 'am_only');
+  const amRes = upsertCalendarEvent_(cal, row.amEventId, payload);
 
   out.am.eventId = amRes.eventId || '';
   out.am.syncStatus = amRes.action;
   out.am.syncAt = now;
 
-  out.pm.eventId = pmRes.eventId || '';
-  out.pm.syncStatus = pmRes.action;
-  out.pm.syncAt = now;
+  if (row.pmEventId) {
+    const deleted = deleteCalendarEventSafe_(cal, row.pmEventId);
+    out.pm.eventId = '';
+    out.pm.syncStatus = deleted ? '削除' : '削除済/未検出';
+    out.pm.syncAt = now;
+  } else {
+    out.pm.eventId = '';
+    out.pm.syncStatus = '';
+    out.pm.syncAt = '';
+  }
 
   return out;
 }

@@ -2,15 +2,20 @@ const PLAN_APP = {
   SS_KEY: 'Plan',
   SHEET_SUMMARY: '予定管理表',
   SHEET_MASTER: 'マスタ',
+  SHEET_SETTINGS: 'Settings',
   SHEET_HOLIDAY: '祝日',
   HEADER_ROW: 1,
 
   MASTER_HEADERS: {
-    member: 'メンバー名',
-    order: '表示順',
     status: 'ステータス',
     location: '勤務場所',
     vacation: '休暇',
+    member: 'メンバー名',
+  },
+
+  SETTINGS_HEADERS: {
+    member: '氏名',
+    group: 'グループ',
   },
 
   MEMBER_SHEET_HEADERS: {
@@ -33,46 +38,90 @@ const PLAN_APP = {
  *  ====================================================================== */
 
 function api_getPlanMaster() {
-  const sh = getPlanSheet_(PLAN_APP.SHEET_MASTER);
-  const hm = getHeaderMap_(sh, PLAN_APP.HEADER_ROW);
-  const lastRow = sh.getLastRow();
-  if (lastRow <= PLAN_APP.HEADER_ROW) {
-    return {
-      ok: true,
-      members: [],
-      statusList: [],
-      locationList: [],
-      vacationList: [],
-    };
-  }
+  const shMaster = getPlanSheet_(PLAN_APP.SHEET_MASTER);
+  const hmMaster = getHeaderMap_(shMaster, PLAN_APP.HEADER_ROW);
 
-  const values = sh.getRange(PLAN_APP.HEADER_ROW + 1, 1, lastRow - PLAN_APP.HEADER_ROW, sh.getLastColumn()).getValues();
+  const shSettings = getPlanSheet_(PLAN_APP.SHEET_SETTINGS);
+  const hmSettings = getHeaderMap_(shSettings, PLAN_APP.HEADER_ROW);
+
+  const masterLastRow = shMaster.getLastRow();
+  const settingsLastRow = shSettings.getLastRow();
 
   const statusSet = new Set();
   const locationSet = new Set();
   const vacationSet = new Set();
-  const members = [];
 
-  values.forEach(r => {
-    const member = normalizeText_(r[hm[PLAN_APP.MASTER_HEADERS.member] - 1]);
-    const order = Number(r[hm[PLAN_APP.MASTER_HEADERS.order] - 1] || 9999);
-    const status = normalizeText_(r[hm[PLAN_APP.MASTER_HEADERS.status] - 1]);
-    const location = normalizeText_(r[hm[PLAN_APP.MASTER_HEADERS.location] - 1]);
-    const vacation = normalizeText_(r[hm[PLAN_APP.MASTER_HEADERS.vacation] - 1]);
+  // Settings側：メンバーとグループ
+  const settingsMembers = [];
+  if (settingsLastRow > PLAN_APP.HEADER_ROW) {
+    const vals = shSettings.getRange(
+      PLAN_APP.HEADER_ROW + 1,
+      1,
+      settingsLastRow - PLAN_APP.HEADER_ROW,
+      shSettings.getLastColumn()
+    ).getValues();
 
-    if (status) statusSet.add(status);
-    if (location) locationSet.add(location);
-    if (vacation) vacationSet.add(vacation);
-    if (member) members.push({ name: member, order });
+    vals.forEach((r, idx) => {
+      const member = normalizeText_(r[hmSettings[PLAN_APP.SETTINGS_HEADERS.member] - 1]);
+      const group  = normalizeText_(r[hmSettings[PLAN_APP.SETTINGS_HEADERS.group] - 1]);
+
+      if (member) {
+        settingsMembers.push({
+          name: member,
+          group: group || '',
+          order: idx + 1, // Settingsの並び順を表示順として使う
+        });
+      }
+    });
+  }
+
+  // マスタ側：ステータス・勤務場所・休暇・メンバー名
+  const masterMemberSet = new Set();
+  if (masterLastRow > PLAN_APP.HEADER_ROW) {
+    const vals = shMaster.getRange(
+      PLAN_APP.HEADER_ROW + 1,
+      1,
+      masterLastRow - PLAN_APP.HEADER_ROW,
+      shMaster.getLastColumn()
+    ).getValues();
+
+    vals.forEach(r => {
+      const status   = normalizeText_(r[hmMaster[PLAN_APP.MASTER_HEADERS.status] - 1]);
+      const location = normalizeText_(r[hmMaster[PLAN_APP.MASTER_HEADERS.location] - 1]);
+      const vacation = normalizeText_(r[hmMaster[PLAN_APP.MASTER_HEADERS.vacation] - 1]);
+      const member   = normalizeText_(r[hmMaster[PLAN_APP.MASTER_HEADERS.member] - 1]);
+
+      if (status) statusSet.add(status);
+      if (location) locationSet.add(location);
+      if (vacation) vacationSet.add(vacation);
+      if (member) masterMemberSet.add(member);
+    });
+  }
+
+  // Settingsを優先してメンバー一覧を作る
+  const memberMap = new Map();
+  settingsMembers.forEach(x => {
+    memberMap.set(x.name, x);
   });
 
-  const uniqMembers = Array.from(
-    new Map(members.map(x => [x.name, x])).values()
-  ).sort((a, b) => a.order - b.order);
+  // マスタにしかいないメンバーも補完
+  Array.from(masterMemberSet).forEach(name => {
+    if (!memberMap.has(name)) {
+      memberMap.set(name, {
+        name,
+        group: '',
+        order: 9999,
+      });
+    }
+  });
+
+  const uniqMembers = Array.from(memberMap.values())
+    .sort((a, b) => a.order - b.order);
 
   return {
     ok: true,
     members: uniqMembers.map(x => x.name),
+    memberGroups: uniqMembers,
     statusList: Array.from(statusSet),
     locationList: Array.from(locationSet),
     vacationList: Array.from(vacationSet),
@@ -96,7 +145,9 @@ function api_getMemberMonthPlan(memberName, baseYm, months) {
   if (lastRow > 1) {
     const vals = sh.getRange(2, 1, lastRow - 1, sh.getLastColumn()).getValues();
     vals.forEach(r => {
-      const key = formatDateKey_(r[hm[needHeaders.date] - 1]);
+      const key = normalizePlanDateKey_(r[hm[needHeaders.date] - 1]);
+      if (!key) return;
+
       mapByDate[key] = {
         date: key,
         week: normalizeText_(r[hm[needHeaders.week] - 1]),
@@ -113,28 +164,147 @@ function api_getMemberMonthPlan(memberName, baseYm, months) {
   }
 
   dates.forEach(d => {
-    const key = formatDateKey_(d);
+    const key = normalizePlanDateKey_(d);
     data.push(
       mapByDate[key] || {
         date: key,
         week: getWeekdayJa_(d),
-        amStatus: '',
-        amLocation: '',
-        amVacation: '',
-        amCustomer: '',
-        pmStatus: '',
-        pmLocation: '',
-        pmVacation: '',
-        pmCustomer: '',
+        amStatus: undefined,
+        amLocation: undefined,
+        amVacation: undefined,
+        amCustomer: undefined,
+        pmStatus: undefined,
+        pmLocation: undefined,
+        pmVacation: undefined,
+        pmCustomer: undefined,
       }
     );
   });
 
   return { ok: true, data };
 }
+/** ======================================================================
+ *   個人シートの保存
+ *  ====================================================================== */
+
+function hasOwn_(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function normalizeWriteValue_(v) {
+  if (v === null) return '';
+  if (v === undefined) return undefined;
+  if (v === '') return undefined; // 空文字は未変更扱い
+  return v;
+}
+function normalizePlanDateKey_(v) {
+  if (v === null || v === undefined || v === '') return '';
+
+  // Date型
+  if (Object.prototype.toString.call(v) === '[object Date]' && !isNaN(v)) {
+    return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd');
+  }
+
+  // 文字列・その他
+  const s = String(v).trim();
+  if (!s) return '';
+
+  const d = parseDateFlexible_(s);
+  if (d) {
+    return Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy/MM/dd');
+  }
+
+  return s;
+}
+
+function isMeaningfulPlanRow_(obj) {
+  return !!(
+    String(obj.amStatus   || '').trim() ||
+    String(obj.amLocation || '').trim() ||
+    String(obj.amVacation || '').trim() ||
+    String(obj.amCustomer || '').trim() ||
+    String(obj.pmStatus   || '').trim() ||
+    String(obj.pmLocation || '').trim() ||
+    String(obj.pmVacation || '').trim() ||
+    String(obj.pmCustomer || '').trim()
+  );
+}
+
+function setCellIfPresent_(sh, row, col, obj, key) {
+  if (!col) return;
+  if (!hasOwn_(obj, key)) return; // 項目自体が来ていないなら既存値保持
+
+  const v = normalizeWriteValue_(obj[key]);
+  if (v === undefined) return;
+
+  sh.getRange(row, col).setValue(v);
+}
+
+function getExistingEventIds_(sh, row, hm) {
+  return {
+    amEventId: String((hm['AM_eventId'] ? sh.getRange(row, hm['AM_eventId']).getValue() : '') || '').trim(),
+    pmEventId: String((hm['PM_eventId'] ? sh.getRange(row, hm['PM_eventId']).getValue() : '') || '').trim(),
+  };
+}
+
+function readPlanRowCurrentValues_(sh, row, hm) {
+  return {
+    date:       hm['日付']         ? sh.getRange(row, hm['日付']).getDisplayValue() : '',
+    week:       hm['曜日']         ? sh.getRange(row, hm['曜日']).getDisplayValue() : '',
+
+    amStatus:   hm['AM_ステータス']   ? sh.getRange(row, hm['AM_ステータス']).getDisplayValue() : '',
+    amLocation: hm['AM_勤務場所']     ? sh.getRange(row, hm['AM_勤務場所']).getDisplayValue() : '',
+    amVacation: hm['AM_休暇']         ? sh.getRange(row, hm['AM_休暇']).getDisplayValue() : '',
+    amCustomer: hm['AM_対応顧客名']   ? sh.getRange(row, hm['AM_対応顧客名']).getDisplayValue() : '',
+
+    pmStatus:   hm['PM_ステータス']   ? sh.getRange(row, hm['PM_ステータス']).getDisplayValue() : '',
+    pmLocation: hm['PM_勤務場所']     ? sh.getRange(row, hm['PM_勤務場所']).getDisplayValue() : '',
+    pmVacation: hm['PM_休暇']         ? sh.getRange(row, hm['PM_休暇']).getDisplayValue() : '',
+    pmCustomer: hm['PM_対応顧客名']   ? sh.getRange(row, hm['PM_対応顧客名']).getDisplayValue() : '',
+  };
+}
+
+function pickMergedPlanValue_(incoming, key, currentValue) {
+  if (!hasOwn_(incoming, key)) return currentValue;
+
+  const v = incoming[key];
+
+  // undefined / '' は未変更扱い
+  if (v === undefined || v === '') return currentValue;
+
+  // null のときだけ明示クリア
+  if (v === null) return '';
+
+  return String(v).trim();
+}
+
+function mergePlanRowForSave_(current, incoming) {
+  return {
+    date: hasOwn_(incoming, 'date')
+      ? normalizePlanDateKey_(incoming.date)
+      : normalizePlanDateKey_(current.date),
+
+    week: hasOwn_(incoming, 'week')
+      ? (incoming.week === undefined || incoming.week === '' ? (current.week || '') : String(incoming.week).trim())
+      : (current.week || ''),
+
+    amStatus:   pickMergedPlanValue_(incoming, 'amStatus',   current.amStatus),
+    amLocation: pickMergedPlanValue_(incoming, 'amLocation', current.amLocation),
+    amVacation: pickMergedPlanValue_(incoming, 'amVacation', current.amVacation),
+    amCustomer: pickMergedPlanValue_(incoming, 'amCustomer', current.amCustomer),
+
+    pmStatus:   pickMergedPlanValue_(incoming, 'pmStatus',   current.pmStatus),
+    pmLocation: pickMergedPlanValue_(incoming, 'pmLocation', current.pmLocation),
+    pmVacation: pickMergedPlanValue_(incoming, 'pmVacation', current.pmVacation),
+    pmCustomer: pickMergedPlanValue_(incoming, 'pmCustomer', current.pmCustomer),
+  };
+}
+
 
 /** ======================================================================
  *   個人シートの保存
+ *   - 項目未送信なら既存値保持
+ *   - カレンダー同期あり
  *  ====================================================================== */
 
 function api_saveMemberMonthPlan(payload) {
@@ -146,7 +316,7 @@ function api_saveMemberMonthPlan(payload) {
   const hm = getHeaderMap_(sh, 1);
 
   const required = [
-    '日付','曜日',
+    '日付','曜日','所定休日',
     'AM_ステータス','AM_勤務場所','AM_休暇','AM_対応顧客名',
     'AM_eventId','AM_syncStatus','AM_syncAt',
     'PM_ステータス','PM_勤務場所','PM_休暇','PM_対応顧客名',
@@ -163,60 +333,73 @@ function api_saveMemberMonthPlan(payload) {
   if (lastRow > 1) {
     const vals = sh.getRange(2, hm['日付'], lastRow - 1, 1).getValues();
     vals.forEach((r, i) => {
-      const key = formatDateKey_(r[0]);
+      const key = normalizePlanDateKey_(r[0]);
       if (key) existingMap[key] = i + 2;
     });
   }
 
-  // 既存eventIdも含めて同期用データを作る
   const syncSourceRows = [];
 
   rows.forEach(obj => {
-    const key = String(obj.date || '').trim();
+    if (!isMeaningfulPlanRow_(obj)) return;
+
+    const key = normalizePlanDateKey_(obj.date);
     if (!key) return;
 
     let row = existingMap[key];
+    let isNew = false;
+
     if (!row) {
       row = sh.getLastRow() + 1;
       existingMap[key] = row;
+      isNew = true;
     }
 
-    sh.getRange(row, hm['日付']).setValue(key);
-    sh.getRange(row, hm['曜日']).setValue(obj.week || '');
+    // 新規行なら最低限の日付・曜日だけは入れる
+    if (isNew) {
+      sh.getRange(row, hm['日付']).setValue(key);
+      sh.getRange(row, hm['曜日']).setValue(obj.week || '');
+    } else {
+      // 既存行は、送られてきた項目だけ更新
+      setCellIfPresent_(sh, row, hm['日付'], obj, 'date');
+      setCellIfPresent_(sh, row, hm['曜日'], obj, 'week');
+    }
 
-    sh.getRange(row, hm['AM_ステータス']).setValue(obj.amStatus || '');
-    sh.getRange(row, hm['AM_勤務場所']).setValue(obj.amLocation || '');
-    sh.getRange(row, hm['AM_休暇']).setValue(obj.amVacation || '');
-    sh.getRange(row, hm['AM_対応顧客名']).setValue(obj.amCustomer || '');
+    setCellIfPresent_(sh, row, hm['AM_ステータス'], obj, 'amStatus');
+    setCellIfPresent_(sh, row, hm['AM_勤務場所'], obj, 'amLocation');
+    setCellIfPresent_(sh, row, hm['AM_休暇'], obj, 'amVacation');
+    setCellIfPresent_(sh, row, hm['AM_対応顧客名'], obj, 'amCustomer');
 
-    sh.getRange(row, hm['PM_ステータス']).setValue(obj.pmStatus || '');
-    sh.getRange(row, hm['PM_勤務場所']).setValue(obj.pmLocation || '');
-    sh.getRange(row, hm['PM_休暇']).setValue(obj.pmVacation || '');
-    sh.getRange(row, hm['PM_対応顧客名']).setValue(obj.pmCustomer || '');
+    setCellIfPresent_(sh, row, hm['PM_ステータス'], obj, 'pmStatus');
+    setCellIfPresent_(sh, row, hm['PM_勤務場所'], obj, 'pmLocation');
+    setCellIfPresent_(sh, row, hm['PM_休暇'], obj, 'pmVacation');
+    setCellIfPresent_(sh, row, hm['PM_対応顧客名'], obj, 'pmCustomer');
+
+    const current = readPlanRowCurrentValues_(sh, row, hm);
+    const merged = mergePlanRowForSave_(current, obj);
+    const eventIds = getExistingEventIds_(sh, row, hm);
 
     syncSourceRows.push({
       sheetRow: row,
-      date: key,
-      week: obj.week || '',
+      date: merged.date,
+      week: merged.week,
 
-      amStatus: obj.amStatus || '',
-      amLocation: obj.amLocation || '',
-      amVacation: obj.amVacation || '',
-      amCustomer: obj.amCustomer || '',
-      amEventId: String(sh.getRange(row, hm['AM_eventId']).getValue() || '').trim(),
+      amStatus: merged.amStatus,
+      amLocation: merged.amLocation,
+      amVacation: merged.amVacation,
+      amCustomer: merged.amCustomer,
+      amEventId: eventIds.amEventId,
 
-      pmStatus: obj.pmStatus || '',
-      pmLocation: obj.pmLocation || '',
-      pmVacation: obj.pmVacation || '',
-      pmCustomer: obj.pmCustomer || '',
-      pmEventId: String(sh.getRange(row, hm['PM_eventId']).getValue() || '').trim(),
+      pmStatus: merged.pmStatus,
+      pmLocation: merged.pmLocation,
+      pmVacation: merged.pmVacation,
+      pmCustomer: merged.pmCustomer,
+      pmEventId: eventIds.pmEventId,
     });
   });
 
-  // カレンダー同期
   const syncResults = syncMemberMonthPlanToCalendar_(memberName, syncSourceRows);
 
-  // eventId / syncStatus / syncAt 書き戻し
   syncResults.forEach(r => {
     const row = r.sheetRow;
     if (!row) return;
@@ -230,14 +413,124 @@ function api_saveMemberMonthPlan(payload) {
     sh.getRange(row, hm['PM_syncAt']).setValue(r.pm?.syncAt || '');
   });
 
-  // 保存後に予定管理表へ反映
-  upsertMemberToSummary_(memberName, rows);
+  // 予定管理表は、保存後の実値で反映
+  const summaryRows = syncSourceRows.map(r => ({
+    date: normalizePlanDateKey_(r.date),
+    week: r.week || '',
+    amStatus: r.amStatus || '',
+    amLocation: r.amLocation || '',
+    amVacation: r.amVacation || '',
+    amCustomer: r.amCustomer || '',
+    pmStatus: r.pmStatus || '',
+    pmLocation: r.pmLocation || '',
+    pmVacation: r.pmVacation || '',
+    pmCustomer: r.pmCustomer || '',
+  }));
+
+  upsertMemberToSummaryFast_(memberName, summaryRows);
 
   return {
     ok: true,
     syncResults,
   };
 }
+
+function upsertMemberToSummaryFast_(memberName, rows) {
+  const sh = getPlanSheet_(PLAN_APP.SHEET_SUMMARY);
+
+  const HEADER_ROW_1 = 1;
+  const DATA_START_ROW = 2;
+
+  const lastCol = Math.max(sh.getLastColumn(), 2);
+  const headerValues = sh.getRange(HEADER_ROW_1, 1, 1, lastCol).getDisplayValues()[0];
+
+  let memberCol = null;
+  for (let c = 3; c <= lastCol; c++) {
+    if (String(headerValues[c - 1] || '').trim() === memberName) {
+      memberCol = c;
+      break;
+    }
+  }
+
+  if (!memberCol) {
+    memberCol = sh.getLastColumn() + 1;
+    sh.getRange(HEADER_ROW_1, memberCol).setValue(memberName);
+  }
+
+  const lastRow = sh.getLastRow();
+  let bodyValues = [];
+  const dateMap = {};
+
+  if (lastRow >= DATA_START_ROW) {
+    bodyValues = sh.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, Math.max(memberCol, 2)).getValues();
+    bodyValues.forEach((r, i) => {
+      const key = normalizePlanDateKey_(r[0]);
+      if (key) dateMap[key] = i;
+    });
+  }
+
+  const appendRows = [];
+
+  rows.forEach(r => {
+    const dateKey = normalizePlanDateKey_(r.date);
+    if (!dateKey) return;
+
+    const mergedText = buildMergedDayText_(r);
+    if (!mergedText) return;
+
+    let idx = dateMap[dateKey];
+    let rowArr;
+
+    if (idx === undefined) {
+      rowArr = new Array(Math.max(memberCol, 2)).fill('');
+      rowArr[0] = dateKey;
+      rowArr[1] = r.week || '';
+      rowArr[memberCol - 1] = mergedText;
+      appendRows.push(rowArr);
+
+      idx = bodyValues.length + appendRows.length - 1;
+      dateMap[dateKey] = idx;
+    } else {
+      rowArr = bodyValues[idx];
+      while (rowArr.length < memberCol) rowArr.push('');
+
+      rowArr[0] = normalizePlanDateKey_(rowArr[0] || dateKey);
+      if (!rowArr[1]) rowArr[1] = r.week || '';
+      rowArr[memberCol - 1] = mergedText;
+    }
+  });
+
+  if (bodyValues.length) {
+    const width = Math.max(memberCol, 2);
+    const normalized = bodyValues.map(r => {
+      const row = r.slice();
+      while (row.length < width) row.push('');
+      row[0] = normalizePlanDateKey_(row[0]);
+      return row;
+    });
+    sh.getRange(DATA_START_ROW, 1, normalized.length, width).setValues(normalized);
+  }
+
+  if (appendRows.length) {
+    const width = Math.max(memberCol, 2);
+    const normalizedAppend = appendRows.map(r => {
+      const row = r.slice();
+      while (row.length < width) row.push('');
+      row[0] = normalizePlanDateKey_(row[0]);
+      return row;
+    });
+    sh.getRange(DATA_START_ROW + bodyValues.length, 1, normalizedAppend.length, width).setValues(normalizedAppend);
+  }
+
+  const finalLastRow = sh.getLastRow();
+  if (finalLastRow >= DATA_START_ROW) {
+    sh.getRange(DATA_START_ROW, memberCol, finalLastRow - DATA_START_ROW + 1, 1).setWrap(true);
+  }
+}
+
+/** ======================================================================
+ *   個人シートの高速保存
+ *  ====================================================================== */
 
 function api_saveMemberMonthPlanFast(payload) {
   try {
@@ -249,51 +542,105 @@ function api_saveMemberMonthPlanFast(payload) {
     const hm = getHeaderMap_(sh, 1);
 
     const required = [
-      '日付','曜日',
+      '日付','曜日','所定休日',
       'AM_ステータス','AM_勤務場所','AM_休暇','AM_対応顧客名',
       'PM_ステータス','PM_勤務場所','PM_休暇','PM_対応顧客名'
     ];
-
     required.forEach(h => {
       if (!hm[h]) throw new Error('個人シートのヘッダー不足: ' + h);
     });
 
+    const targetRows = rows
+      .map(r => ({
+        ...r,
+        date: normalizePlanDateKey_(r.date),
+      }))
+      .filter(r => r.date && isMeaningfulPlanRow_(r));
+
+    if (!targetRows.length) {
+      return { ok: true, skipped: true };
+    }
+
+    const lastCol = sh.getLastColumn();
     const lastRow = sh.getLastRow();
+
+    let sheetValues = [];
     const existingMap = {};
 
     if (lastRow > 1) {
-      const vals = sh.getRange(2, hm['日付'], lastRow - 1, 1).getValues();
-      vals.forEach((r, i) => {
-        const key = formatDateKey_(r[0]);
-        if (key) existingMap[key] = i + 2;
+      sheetValues = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+      sheetValues.forEach((r, i) => {
+        const key = normalizePlanDateKey_(r[hm['日付'] - 1]);
+        if (key) existingMap[key] = i; // 0-based
       });
     }
 
-    rows.forEach(obj => {
-      const key = String(obj.date || '').trim();
-      if (!key) return;
+    const appendRows = [];
+    const summaryRows = [];
 
-      let row = existingMap[key];
-      if (!row) {
-        row = sh.getLastRow() + 1;
-        existingMap[key] = row;
+    targetRows.forEach(obj => {
+      const key = obj.date;
+      const week = String(obj.week || '').trim();
+
+      let idx = existingMap[key];
+      let rowArr;
+
+      if (idx === undefined) {
+        rowArr = new Array(lastCol).fill('');
+        rowArr[hm['日付'] - 1] = key;
+        rowArr[hm['曜日'] - 1] = week;
+        appendRows.push(rowArr);
+
+        idx = sheetValues.length + appendRows.length - 1;
+        existingMap[key] = idx;
+      } else {
+        rowArr = sheetValues[idx];
       }
 
-      sh.getRange(row, hm['日付']).setValue(key);
-      sh.getRange(row, hm['曜日']).setValue(obj.week || '');
-      sh.getRange(row, hm['AM_ステータス']).setValue(obj.amStatus || '');
-      sh.getRange(row, hm['AM_勤務場所']).setValue(obj.amLocation || '');
-      sh.getRange(row, hm['AM_休暇']).setValue(obj.amVacation || '');
-      sh.getRange(row, hm['AM_対応顧客名']).setValue(obj.amCustomer || '');
-      sh.getRange(row, hm['PM_ステータス']).setValue(obj.pmStatus || '');
-      sh.getRange(row, hm['PM_勤務場所']).setValue(obj.pmLocation || '');
-      sh.getRange(row, hm['PM_休暇']).setValue(obj.pmVacation || '');
-      sh.getRange(row, hm['PM_対応顧客名']).setValue(obj.pmCustomer || '');
+      const currentRow = rowArr;
+
+      currentRow[hm['日付'] - 1] = normalizePlanDateKey_(currentRow[hm['日付'] - 1] || key);
+      if (!currentRow[hm['曜日'] - 1]) currentRow[hm['曜日'] - 1] = week;
+
+      if (obj.amStatus   !== undefined && obj.amStatus   !== '') currentRow[hm['AM_ステータス'] - 1] = obj.amStatus;
+      if (obj.amLocation !== undefined && obj.amLocation !== '') currentRow[hm['AM_勤務場所'] - 1]   = obj.amLocation;
+      if (obj.amVacation !== undefined && obj.amVacation !== '') currentRow[hm['AM_休暇'] - 1]       = obj.amVacation;
+      if (obj.amCustomer !== undefined && obj.amCustomer !== '') currentRow[hm['AM_対応顧客名'] - 1] = obj.amCustomer;
+
+      if (obj.pmStatus   !== undefined && obj.pmStatus   !== '') currentRow[hm['PM_ステータス'] - 1] = obj.pmStatus;
+      if (obj.pmLocation !== undefined && obj.pmLocation !== '') currentRow[hm['PM_勤務場所'] - 1]   = obj.pmLocation;
+      if (obj.pmVacation !== undefined && obj.pmVacation !== '') currentRow[hm['PM_休暇'] - 1]       = obj.pmVacation;
+      if (obj.pmCustomer !== undefined && obj.pmCustomer !== '') currentRow[hm['PM_対応顧客名'] - 1] = obj.pmCustomer;
+
+      summaryRows.push({
+        date: normalizePlanDateKey_(currentRow[hm['日付'] - 1]),
+        week: String(currentRow[hm['曜日'] - 1] || '').trim(),
+        amStatus:   String(currentRow[hm['AM_ステータス'] - 1] || '').trim(),
+        amLocation: String(currentRow[hm['AM_勤務場所'] - 1] || '').trim(),
+        amVacation: String(currentRow[hm['AM_休暇'] - 1] || '').trim(),
+        amCustomer: String(currentRow[hm['AM_対応顧客名'] - 1] || '').trim(),
+        pmStatus:   String(currentRow[hm['PM_ステータス'] - 1] || '').trim(),
+        pmLocation: String(currentRow[hm['PM_勤務場所'] - 1] || '').trim(),
+        pmVacation: String(currentRow[hm['PM_休暇'] - 1] || '').trim(),
+        pmCustomer: String(currentRow[hm['PM_対応顧客名'] - 1] || '').trim(),
+      });
     });
 
-    upsertMemberToSummary_(memberName, rows);
+    if (sheetValues.length) {
+      sh.getRange(2, 1, sheetValues.length, lastCol).setValues(sheetValues);
+    }
 
-    return { ok: true };
+    if (appendRows.length) {
+      sh.getRange(sheetValues.length + 2, 1, appendRows.length, lastCol).setValues(appendRows);
+    }
+
+    upsertMemberToSummaryFast_(memberName, summaryRows);
+
+    return {
+      ok: true,
+      updated: targetRows.length,
+      appended: appendRows.length
+    };
 
   } catch (e) {
     console.error(e);
@@ -348,82 +695,24 @@ function buildMergedDayText_(row) {
 
 
 /** ======================================================================
- *   全体集計作成
- *  ====================================================================== */
-
-function upsertMemberToSummary_(memberName, rows) {
-  const sh = getPlanSheet_(PLAN_APP.SHEET_SUMMARY);
-
-  const HEADER_ROW_1 = 1;
-  const DATA_START_ROW = 2;
-
-  const lastCol = Math.max(sh.getLastColumn(), 2);
-  const h1 = sh.getRange(HEADER_ROW_1, 1, 1, lastCol).getDisplayValues()[0];
-
-  let memberCol = null;
-  for (let c = 3; c <= lastCol; c++) {
-    const name1 = String(h1[c - 1] || '').trim();
-    if (name1 === memberName) {
-      memberCol = c;
-      break;
-    }
-  }
-
-  if (!memberCol) {
-    memberCol = sh.getLastColumn() + 1;
-    sh.getRange(HEADER_ROW_1, memberCol).setValue(memberName);
-  }
-
-  const lastRow = sh.getLastRow();
-  const dateMap = {};
-
-  if (lastRow >= DATA_START_ROW) {
-    const dates = sh.getRange(DATA_START_ROW, 1, lastRow - DATA_START_ROW + 1, 1).getValues();
-    dates.forEach((r, i) => {
-      const key = formatDateKey_(r[0]);
-      if (key) dateMap[key] = DATA_START_ROW + i;
-    });
-  }
-
-  rows.forEach(r => {
-    const dateKey = String(r.date || '').trim();
-    if (!dateKey) return;
-
-    let rowNum = dateMap[dateKey];
-    if (!rowNum) {
-      rowNum = sh.getLastRow() + 1;
-      dateMap[dateKey] = rowNum;
-      sh.getRange(rowNum, 1).setValue(dateKey);
-      sh.getRange(rowNum, 2).setValue(r.week || '');
-    }
-
-    const mergedText = buildMergedDayText_(r);
-    sh.getRange(rowNum, memberCol).setValue(mergedText);
-  });
-
-  sh.getRange(
-    DATA_START_ROW,
-    memberCol,
-    Math.max(sh.getLastRow() - DATA_START_ROW + 1, 1),
-    1
-  ).setWrap(true);
-}
-
-/** ======================================================================
  *   個人登録画面の API 呼び出しイメージ
  *  ====================================================================== */
 
 function api_getSummaryView(baseYm, months) {
   try {
     const sh = getPlanSheet_(PLAN_APP.SHEET_SUMMARY);
-    const values = sh.getDataRange().getDisplayValues();
+    const values = sh.getDataRange().getValues();
 
     if (!values.length) {
       return { ok: true, values: [] };
     }
 
     const header = values[0];
-    const rows = values.slice(1);
+    const rows = values.slice(1).map(r => {
+      const row = r.slice();
+      row[0] = normalizePlanDateKey_(row[0]);
+      return row;
+    });
 
     const start = firstDayOfYm_(baseYm);
     const end   = lastDayOfRange_(baseYm, months);
@@ -464,7 +753,7 @@ function api_getPlanInitContext() {
       throw new Error(master?.error || 'マスタ取得失敗');
     }
 
-    const loginName = getActiveUserNameOrEmail_(); // ← これを使う
+    const loginName = getActiveUserNameOrEmail_();
     const members = master.members || [];
 
     let defaultMember = '';
@@ -472,7 +761,6 @@ function api_getPlanInitContext() {
       defaultMember = members.find(x => String(x).trim() === String(loginName).trim()) || '';
     }
 
-    // 一致しなければ先頭
     if (!defaultMember && members.length) {
       defaultMember = members[0];
     }
@@ -482,6 +770,7 @@ function api_getPlanInitContext() {
       loginName: loginName || '',
       defaultMember: defaultMember || '',
       members: master.members || [],
+      memberGroups: master.memberGroups || [],
       statusList: master.statusList || [],
       locationList: master.locationList || [],
       vacationList: master.vacationList || [],
