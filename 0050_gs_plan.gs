@@ -151,14 +151,24 @@ function api_getMemberMonthPlan(memberName, baseYm, months) {
       mapByDate[key] = {
         date: key,
         week: normalizeText_(r[hm[needHeaders.week] - 1]),
+
         amStatus: normalizeText_(r[hm[needHeaders.amStatus] - 1]),
         amLocation: normalizeText_(r[hm[needHeaders.amLocation] - 1]),
         amVacation: normalizeText_(r[hm[needHeaders.amVacation] - 1]),
         amCustomer: normalizeText_(r[hm[needHeaders.amCustomer] - 1]),
+
         pmStatus: normalizeText_(r[hm[needHeaders.pmStatus] - 1]),
         pmLocation: normalizeText_(r[hm[needHeaders.pmLocation] - 1]),
         pmVacation: normalizeText_(r[hm[needHeaders.pmVacation] - 1]),
         pmCustomer: normalizeText_(r[hm[needHeaders.pmCustomer] - 1]),
+
+        amEventId: normalizeText_(r[hm['AM_eventId'] - 1]),
+        amSyncStatus: normalizeText_(r[hm['AM_syncStatus'] - 1]),
+        amSyncAt: normalizeText_(r[hm['AM_syncAt'] - 1]),
+
+        pmEventId: normalizeText_(r[hm['PM_eventId'] - 1]),
+        pmSyncStatus: normalizeText_(r[hm['PM_syncStatus'] - 1]),
+        pmSyncAt: normalizeText_(r[hm['PM_syncAt'] - 1]),
       };
     });
   }
@@ -169,20 +179,27 @@ function api_getMemberMonthPlan(memberName, baseYm, months) {
       mapByDate[key] || {
         date: key,
         week: getWeekdayJa_(d),
-        amStatus: undefined,
-        amLocation: undefined,
-        amVacation: undefined,
-        amCustomer: undefined,
-        pmStatus: undefined,
-        pmLocation: undefined,
-        pmVacation: undefined,
-        pmCustomer: undefined,
+        amStatus: '',
+        amLocation: '',
+        amVacation: '',
+        amCustomer: '',
+        pmStatus: '',
+        pmLocation: '',
+        pmVacation: '',
+        pmCustomer: '',
+        amEventId: '',
+        amSyncStatus: '',
+        amSyncAt: '',
+        pmEventId: '',
+        pmSyncStatus: '',
+        pmSyncAt: '',
       }
     );
   });
 
   return { ok: true, data };
 }
+
 /** ======================================================================
  *   個人シートの保存
  *  ====================================================================== */
@@ -398,20 +415,6 @@ function api_saveMemberMonthPlan(payload) {
     });
   });
 
-  const syncResults = syncMemberMonthPlanToCalendar_(memberName, syncSourceRows);
-
-  syncResults.forEach(r => {
-    const row = r.sheetRow;
-    if (!row) return;
-
-    sh.getRange(row, hm['AM_eventId']).setValue(r.am?.eventId || '');
-    sh.getRange(row, hm['AM_syncStatus']).setValue(r.am?.syncStatus || '');
-    sh.getRange(row, hm['AM_syncAt']).setValue(r.am?.syncAt || '');
-
-    sh.getRange(row, hm['PM_eventId']).setValue(r.pm?.eventId || '');
-    sh.getRange(row, hm['PM_syncStatus']).setValue(r.pm?.syncStatus || '');
-    sh.getRange(row, hm['PM_syncAt']).setValue(r.pm?.syncAt || '');
-  });
 
   // 予定管理表は、保存後の実値で反映
   const summaryRows = syncSourceRows.map(r => ({
@@ -431,7 +434,6 @@ function api_saveMemberMonthPlan(payload) {
 
   return {
     ok: true,
-    syncResults,
   };
 }
 
@@ -780,6 +782,40 @@ function api_getPlanInitContext() {
     return {
       ok: false,
       error: err.message,
+    };
+  }
+}
+
+function api_getPlanHolidayList() {
+  try {
+    const sh = getPlanSheet_(PLAN_APP.SHEET_MASTER);
+    const lastRow = sh.getLastRow();
+
+    if (lastRow <= PLAN_APP.HEADER_ROW) {
+      return { ok: true, dates: [] };
+    }
+
+    const vals = sh.getRange(
+      PLAN_APP.HEADER_ROW + 1,
+      PLAN_APP.HOLIDAY_COL,
+      lastRow - PLAN_APP.HEADER_ROW,
+      1
+    ).getValues();
+
+    const dates = vals
+      .map(r => normalizePlanDateKey_(r[0]))
+      .filter(v => !!v);
+
+    return {
+      ok: true,
+      dates: Array.from(new Set(dates)),
+    };
+
+  } catch (e) {
+    console.error(e);
+    return {
+      ok: false,
+      error: e.message || String(e),
     };
   }
 }

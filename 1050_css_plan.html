@@ -1,6 +1,6 @@
 <style>
 /* =========================================================
- * PLAN REMAKE v3 - cleaned
+ * PLAN REMAKE v3 - organized
  * ======================================================= */
 
 /* =========================================================
@@ -108,8 +108,12 @@
   color:#334155;
   border-color:#cfd8e3;
 }
-.plan-text-center{ text-align:center; }
-.plan-muted{ color:#94a3b8; }
+.plan-text-center{
+  text-align:center;
+}
+.plan-muted{
+  color:#94a3b8;
+}
 .plan-half-label{
   font-weight:700;
   color:#475569;
@@ -182,13 +186,34 @@
   background:#e2e8f0;
   color:#334155;
 }
-.plan-chip.is-honsya{ background:#FCE4D6; color:#ED7D31; }
-.plan-chip.is-kashiwa{ background:#dcfce7; color:#15803d; }
-.plan-chip.is-yakura{ background:#ede9fe; color:#6d28d9; }
-.plan-chip.is-client{ background:#ffedd5; color:#c2410c; }
-.plan-chip.is-vacation{ background:#fee2e2; color:#b91c1c; }
-.plan-chip.is-vacation-weekend{ background:#e5e7eb; color:#6b7280; }
-.plan-chip.is-default{ background:#e2e8f0; color:#334155; }
+.plan-chip.is-honsya{
+  background:#FCE4D6;
+  color:#ED7D31;
+}
+.plan-chip.is-kashiwa{
+  background:#dcfce7;
+  color:#15803d;
+}
+.plan-chip.is-yakura{
+  background:#ede9fe;
+  color:#6d28d9;
+}
+.plan-chip.is-client{
+  background:#D9E1F2;
+  color:#4472C4;
+}
+.plan-chip.is-vacation{
+  background:#fee2e2;
+  color:#b91c1c;
+}
+.plan-chip.is-vacation-weekend{
+  background:#e5e7eb;
+  color:#6b7280;
+}
+.plan-chip.is-default{
+  background:#e2e8f0;
+  color:#334155;
+}
 
 .plan-customer,
 .plan-customer-inline,
@@ -264,12 +289,12 @@
   position:sticky;
   top:0;
   z-index:30;
-  background:#dbe8f6;
-  color:#111827;
+  background:#c7d8ea !important;
+  color:#0f172a;
   font-weight:700;
   text-align:center;
   white-space:nowrap;
-  box-shadow:0 1px 0 #c7d5e6;
+  box-shadow:0 1px 0 #b7cada;
 }
 .plan-table-summary thead th.plan-summary-date-merged{
   left:0;
@@ -282,7 +307,7 @@
   position:sticky !important;
   left:0;
   z-index:40 !important;
-  background:#dbe8f6 !important;
+  background:#c7d8ea !important;
 }
 .plan-summary-date,
 .plan-table-summary td.plan-summary-date{
@@ -346,19 +371,10 @@
   background:#eef4f8;
 }
 
-.plan-row-holiday td{ background:#fff7f7; }
-.plan-row-sat td{ background:#f8fbff; }
-.plan-row-holiday td.plan-summary-date,
-.plan-row-holiday td.plan-summary-value{
-  background:#fff1f1;
-}
-.plan-row-sat td.plan-summary-date,
-.plan-row-sat td.plan-summary-value{
-  background:#eef6ff;
-}
-
 /* compact cell layout */
-.plan-table-summary.is-compact{ table-layout:fixed; }
+.plan-table-summary.is-compact{
+  table-layout:fixed;
+}
 .plan-compact-center,
 .plan-compact-stack,
 .plan-compact-line{
@@ -386,9 +402,11 @@
 }
 .plan-compact-line{
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
   text-align:center;
+  gap:1px;
   font-size:11px;
   line-height:1.15;
 }
@@ -401,6 +419,48 @@
   font-size:9px;
   line-height:1;
   color:#64748b;
+}
+
+/* 自分列ハイライト */
+#planSummaryTable td.plan-summary-cell.is-me{
+  background:#eff6ff;
+}
+#planSummaryTable td.plan-summary-cell.is-me:empty{
+  background:#eff6ff;
+}
+#planSummaryTable th.plan-summary-cell.is-me{
+  background:#1d4f91 !important;
+  color:#fff;
+}
+
+/* ＠以降 */
+#planSummaryTable .plan-note{
+  display:block;
+  margin-top:1px;
+  font-size:8px;
+  line-height:1.05;
+  color:#64748b;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+
+/* =========================================================
+ * Holiday / Weekend
+ * ======================================================= */
+.plan-row-holiday td,
+.plan-row-holiday td.plan-summary-date,
+.plan-row-holiday td.plan-summary-value,
+.plan-cal-day.plan-row-holiday{
+  background:#F2F2F2;
+}
+
+.plan-row-sat td,
+.plan-row-sat td.plan-summary-date,
+.plan-row-sat td.plan-summary-value,
+.plan-cal-day.plan-row-sat{
+  background:#F2F2F2;
 }
 
 /* =========================================================
@@ -553,8 +613,10 @@
   background:#f8fafc;
   color:#94a3b8;
 }
-.plan-cal-day.plan-row-holiday{ background:#fff7f7; }
-.plan-cal-day.plan-row-sat{ background:#f8fbff; }
+.plan-cal-day.is-empty{
+  background:#fff;
+  border:1px solid #e5e7eb;
+}
 .plan-cal-day.is-today{
   box-shadow:inset 0 0 0 2px #3b82f6;
 }
@@ -639,6 +701,67 @@
 .plan-cal-empty{
   font-size:11px;
   color:#94a3b8;
+}
+
+/* 同期表示 */
+.plan-cal-line.is-sync-fixed{
+  background:rgba(34, 197, 94, 0.10);
+  border-left:3px solid #22c55e;
+}
+.plan-cal-line.is-sync-tentative{
+  background:rgba(245, 158, 11, 0.10);
+  border-left:3px solid #f59e0b;
+}
+.plan-cal-line.is-sync-off{
+  background:rgba(148, 163, 184, 0.08);
+  border-left:3px solid #cbd5e1;
+}
+
+.plan-sync-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  margin-left:6px;
+  width:16px;
+  height:16px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+  line-height:1;
+}
+.plan-sync-icon.is-done{
+  background:#dcfce7;
+  color:#166534;
+}
+.plan-sync-icon.is-alert{
+  background:#fee2e2;
+  color:#991b1b;
+}
+
+.plan-sync-summary.is-sync-fixed{
+  background:rgba(34, 197, 94, 0.08);
+  border-radius:8px;
+  padding:2px 4px;
+}
+.plan-sync-summary.is-sync-tentative{
+  background:rgba(245, 158, 11, 0.08);
+  border-radius:8px;
+  padding:2px 4px;
+}
+.plan-sync-summary.is-sync-off{
+  opacity:.92;
+}
+
+/* =========================================================
+ * Month navigation
+ * ======================================================= */
+.plan-month-nav{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.plan-month-nav .plan-input-month{
+  min-width:140px;
 }
 
 /* =========================================================
@@ -832,56 +955,5 @@
     padding:10px 10px 12px;
     height:calc(100vh - 88px);
   }
-}
-
-#planSummaryTable th.plan-summary-cell.is-me{
-  background:#dbeafe;
-  color:#1d4ed8;
-}
-
-#planSummaryTable td.plan-summary-cell.is-me{
-  background:#eff6ff;
-}
-
-#planSummaryTable td.plan-summary-cell.is-me:empty{
-  background:#eff6ff;
-}
-
-#planSummaryTable thead th{
-  background:#c7d8ea !important;
-  color:#0f172a;
-  box-shadow:0 1px 0 #b7cada;
-}
-
-#planSummaryTable .plan-summary-date-merged{
-  background:#c7d8ea !important;
-}
-
-#planSummaryTable th.plan-summary-cell.is-me{
-  background:#1d4f91 !important;
-  color:#fff;
-}
-/* AM/PM違い時の1行を縦並びに */
-#planSummaryTable .plan-compact-line{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  text-align:center;
-  gap:1px;
-  width:100%;
-}
-
-/* ＠以降はタグの下に小さく表示 */
-#planSummaryTable .plan-note{
-  display:block;
-  margin-top:1px;
-  font-size:8px;
-  line-height:1.05;
-  color:#64748b;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:100%;
 }
 </style>

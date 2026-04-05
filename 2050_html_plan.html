@@ -2,7 +2,7 @@
   <div class="panel-toolbar">
     <div class="panel-toolbar-left">
       <div class="plan-toolbar-group plan-member-filter-group">
-        <label class="plan-label">対象メンバー</label>
+        <label class="plan-label">対象チーム</label>
         <button type="button" class="plan-btn plan-btn-light" id="btnPlanMemberFilter">
           CL＋SV
         </button>
@@ -53,6 +53,7 @@
         </div>
         <div class="plan-modal-head-actions">
           <button type="button" class="plan-btn plan-btn-light" id="btnClosePlanPersonal">閉じる</button>
+          <button type="button" class="plan-btn plan-btn-primary" id="btnPlanCalSync">カレンダー同期</button>
           <button type="button" class="plan-btn plan-btn-primary" id="btnPlanSavePersonal">保存</button>
         </div>
       </div>
@@ -65,16 +66,11 @@
 
         <div class="plan-toolbar-group">
           <label class="plan-label" for="planTargetMonth">対象月</label>
-          <input type="month" id="planTargetMonth" class="plan-input plan-input-month">
-        </div>
-
-        <div class="plan-toolbar-group">
-          <label class="plan-label" for="planRange">表示期間</label>
-          <select id="planRange" class="plan-select">
-            <option value="1" selected>1か月</option>
-            <option value="2">2か月</option>
-            <option value="3">3か月</option>
-          </select>
+          <div class="plan-month-nav">
+            <button type="button" class="plan-btn plan-btn-light" id="btnPlanPrevMonth">＜</button>
+            <input type="month" id="planTargetMonth" class="plan-input plan-input-month">
+            <button type="button" class="plan-btn plan-btn-light" id="btnPlanNextMonth">＞</button>
+          </div>
         </div>
 
         <div class="plan-modal-statusline" id="planModalStatusLine"></div>

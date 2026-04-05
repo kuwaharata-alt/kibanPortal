@@ -42,7 +42,7 @@ function api_syncMemberMonthPlanCalendar(payload) {
       pmVacation: r[hm['PM_休暇'] - 1] || '',
       pmCustomer: r[hm['PM_対応顧客名'] - 1] || '',
       pmEventId: r[hm['PM_eventId'] - 1] || '',
-    })).filter(r => r.date);
+    }));
 
     const syncResults = syncMemberMonthPlanToCalendar_(memberName, rows);
 
@@ -126,20 +126,6 @@ function syncOnePlanRowToCalendar_(cal, memberName, row) {
   };
 
   if (!amEnabled && !pmEnabled) {
-    if (row.amEventId) {
-      const deleted = deleteCalendarEventSafe_(cal, row.amEventId);
-      out.am.eventId = '';
-      out.am.syncStatus = deleted ? '削除' : '削除済/未検出';
-      out.am.syncAt = now;
-    }
-
-    if (row.pmEventId) {
-      const deleted = deleteCalendarEventSafe_(cal, row.pmEventId);
-      out.pm.eventId = '';
-      out.pm.syncStatus = deleted ? '削除' : '削除済/未検出';
-      out.pm.syncAt = now;
-    }
-
     return out;
   }
 
@@ -179,23 +165,19 @@ function syncOnePlanRowToCalendar_(cal, memberName, row) {
     return out;
   }
 
-  const payload = buildCalendarPayload_(row, 'am_only');
-  const amRes = upsertCalendarEvent_(cal, row.amEventId, payload);
+  const amPayload = buildCalendarPayload_(row, 'am');
+  const pmPayload = buildCalendarPayload_(row, 'pm');
+
+  const amRes = upsertCalendarEvent_(cal, row.amEventId, amPayload);
+  const pmRes = upsertCalendarEvent_(cal, row.pmEventId, pmPayload);
 
   out.am.eventId = amRes.eventId || '';
   out.am.syncStatus = amRes.action;
   out.am.syncAt = now;
 
-  if (row.pmEventId) {
-    const deleted = deleteCalendarEventSafe_(cal, row.pmEventId);
-    out.pm.eventId = '';
-    out.pm.syncStatus = deleted ? '削除' : '削除済/未検出';
-    out.pm.syncAt = now;
-  } else {
-    out.pm.eventId = '';
-    out.pm.syncStatus = '';
-    out.pm.syncAt = '';
-  }
+  out.pm.eventId = pmRes.eventId || '';
+  out.pm.syncStatus = pmRes.action;
+  out.pm.syncAt = now;
 
   return out;
 }
