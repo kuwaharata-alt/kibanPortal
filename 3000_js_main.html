@@ -10,22 +10,27 @@ window.AppState = window.AppState || {
   statusHeader: 'ステータス',
   page: 1,
   pageSize: 50,
-  loingUser:null,
   total: 0,
+  loginUser: null,
+  auth: {
+    allowedKeys: [],
+    isAdmin: false,
+    isUser: false
+  },
   plan: {
     month: '',
     columns: [],
     groups: [],
     rows: [],
     rowIndexMap: [],
-    changes: new Map(),  // key `${r}:${c}` -> {r,c,v}
+    changes: new Map(),
     editing: null,
-  },  
+  },
   task: {
-  memberMode: 'all', // all | me
-  members: [],
-  loginUser: ''
-},
+    memberMode: 'all',
+    members: [],
+    loginUser: ''
+  },
 };
 
 const DEFAULT_PANEL = 'panel-link';
@@ -90,6 +95,11 @@ function toggleSidebar(){
 async function navTo(btn){
   if (!btn) return;
 
+  if (!isAllowedMenu_(btn)) {
+    setErr('このメニューを表示する権限がありません');
+    return;
+  }
+
   const url = btn.getAttribute('data-url');
   if (url) { window.open(url, '_blank'); return; }
 
@@ -106,7 +116,8 @@ async function navTo(btn){
   if (action && typeof window[action] === 'function') {
     await window[action]();
   } else {
-    setErr(''); setMeta('');
+    setErr('');
+    setMeta('');
   }
 
   if (panelId === 'panel-list') {
@@ -117,40 +128,51 @@ async function navTo(btn){
     return;
   }
 
-  if (panelId === 'panel-rule') {
-    await reload();
-    return;
-  }
-
-  if (panelId === 'panel-task') {
-    await loadTask();
-    return;
-  }
-
-  if (panelId === 'panel-plan') {
-    await loadPlan_();
-    return;
-  }
-
-  if (panelId === 'panel-info') {
-    await initInfoHub();
-    return;
-  }
-  if (panelId === 'panel-operation') {
-    await loadOperationDashboard();
-    return;
-  }
-  if (panelId === 'panel-wbs') {
-    await loadCaseWbs();
-    return;
-  }
+  if (panelId === 'panel-rule') return await reload();
+  if (panelId === 'panel-task') return await loadTask();
+  if (panelId === 'panel-plan') return await loadPlan_();
+  if (panelId === 'panel-info') return await initInfoHub();
+  if (panelId === 'panel-operation') return await loadOperationDashboard();
+  if (panelId === 'panel-wbs') return await loadCaseWbs();
 }
 
 /** ===== 初回 & hash追従 ===== */
 window.addEventListener('DOMContentLoaded', async () => {
-  const panelId = resolveInitialPanel();
-  setActivePanel(panelId, {pushHash:true});
-  
+  try {
+    await fetchLoginUser_();
+  } catch (e) {
+    console.warn('login user取得失敗', e);
+  }
+
+  try {
+    await fetchMenuAuth_();
+  } catch (e) {
+    console.warn('menu auth取得失敗', e);
+  }
+
+  applyMenuAuth_();
+  renderLoginUser_();
+
+  let panelId = resolveInitialPanel();
+
+  // 権限のない画面がURLハッシュやlocalStorageに残っていた場合の逃がし
+  const firstBtn = getFirstAllowedButton_();
+  if (!firstBtn) {
+    setErr('表示可能なメニューがありません');
+    return;
+  }
+
+  const targetBtn = document.querySelector(`.nav-btn[data-panel="${panelId}"]`);
+  if (!targetBtn || !isAllowedMenu_(targetBtn)) {
+    panelId = firstBtn.dataset.panel || DEFAULT_PANEL;
+    if (firstBtn.dataset.type) {
+      localStorage.setItem(LS_KEY_TYPE, firstBtn.dataset.type);
+    }
+  }
+
+  setActivePanel(panelId, { pushHash: true });
+
+  // ここは既存ロジックそのままでOK
   if (panelId === 'panel-list') {
     const st = window.AppState;
     st.type = localStorage.getItem(LS_KEY_TYPE) || st.type || 'SV';
@@ -158,29 +180,14 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadCases_();
   }
 
-  if (panelId === 'panel-rule') {
-    await reload();
-  }
+  if (panelId === 'panel-rule') await reload();
+  if (panelId === 'panel-task') await loadTask();
+  if (panelId === 'panel-plan') await loadPlan_();
+  if (panelId === 'panel-info') await initInfoHub();
+  if (panelId === 'panel-operation') await loadOperationDashboard();
+  if (panelId === 'panel-wbs') await loadCaseWbs();
 
-  if (panelId === 'panel-task') {
-    await loadTask();
-  }
-  if (panelId === 'panel-plan') {
-    await loadPlan_();
-  }
-
-  if (panelId === 'panel-info') {
-    await initInfoHub();
-  }
-  if (panelId === 'panel-operation') {
-    await loadOperationDashboard();
-  }
-  if (panelId === 'panel-wbs') {
-    await loadCaseWbs();
-    return;
-  }
   if (typeof window.setTitleShort_ === 'function') window.setTitleShort_();
-
 });
 
 window.addEventListener('hashchange', async () => {
@@ -292,6 +299,76 @@ function setTitleShort_(){
   };
 
   el.textContent = titleMap[panelId] || 'SOL推進部基盤Grポータル';
+}
+
+function fetchMenuAuth_(){
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(res => {
+        if (!res?.ok) {
+          reject(res?.error || 'menu auth api error');
+          return;
+        }
+
+        window.AppState.auth = {
+          allowedKeys: Array.isArray(res.allowedKeys) ? res.allowedKeys : [],
+          isAdmin: !!res.isAdmin,
+          isUser: !!res.isUser
+        };
+
+        resolve(res);
+      })
+      .withFailureHandler(err => reject(err))
+      .api_getMenuAuth();
+  });
+}
+
+function applyMenuAuth_(){
+  const allowed = new Set(window.AppState?.auth?.allowedKeys || []);
+
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    const key = btn.dataset.authKey || '';
+    const show = !key || allowed.has(key);
+
+    btn.style.display = show ? '' : 'none';
+    btn.dataset.visible = show ? '1' : '0';
+  });
+
+  // セクション見出しも、配下ボタンが全部非表示なら隠す
+  const menu = document.querySelector('.sb-menu');
+  if (!menu) return;
+
+  const children = Array.from(menu.children);
+  for (let i = 0; i < children.length; i++) {
+    const el = children[i];
+    if (!el.classList.contains('sb-section')) continue;
+
+    let hasVisibleBtn = false;
+    for (let j = i + 1; j < children.length; j++) {
+      const next = children[j];
+      if (next.classList.contains('sb-section')) break;
+      if (next.classList.contains('nav-btn') && next.dataset.visible === '1') {
+        hasVisibleBtn = true;
+        break;
+      }
+    }
+
+    el.style.display = hasVisibleBtn ? '' : 'none';
+  }
+}
+
+function isAllowedMenu_(btn){
+  if (!btn) return false;
+  const key = btn.dataset.authKey || '';
+  if (!key) return true;
+
+  const allowed = new Set(window.AppState?.auth?.allowedKeys || []);
+  return allowed.has(key);
+}
+
+function getFirstAllowedButton_(){
+  return Array.from(document.querySelectorAll('.nav-btn'))
+    .find(btn => isAllowedMenu_(btn));
 }
 
 window.setTitleShort_ = setTitleShort_;

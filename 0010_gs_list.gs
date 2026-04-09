@@ -3,15 +3,14 @@
  * ====================================================================== */
 
 const WEBVIEW = {
-  SHEET_SV: 'SV案件管理表',
-  SHEET_SVST: 'SV案件ステータス',
-  SHEET_CL: 'CL案件管理表',
-  SHEET_CLST: 'CL案件ステータス',
+  SHEET_PR: '案件情報',
+  SHEET_SV: '案件管理表_本社-現地',
+  SHEET_CL: '案件管理表_倉庫',
 
   KEY_HEADER: '見積番号',
-  STATUS_HEADER: 'ステータス',
+  STATUS_HEADER: 'open/close',
 
-  CLOSED_WORDS: ['クローズ'],
+  CLOSED_WORDS: ['close'],
   MAX_ROWS: 5000,
 };
 
@@ -19,12 +18,12 @@ const VIEW_CONFIG = {
   SV: {
     sheetName: WEBVIEW.SHEET_SV,
     keyHeader: WEBVIEW.KEY_HEADER,
-    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業期間', '備考'],
+    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業スケジュール', '備考'],
   },
   CL: {
     sheetName: WEBVIEW.SHEET_CL,
     keyHeader: WEBVIEW.KEY_HEADER,
-    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業期間', '備考'],
+    list: ['ステータス', '案件概要', '案件情報', '担当SE', '作業スケジュール', '備考'],
   }
 };
 
@@ -33,7 +32,7 @@ const VIRTUAL_HEADERS = [
   '案件概要',
   '案件情報',
   '担当SE',
-  '作業期間',
+  '作業スケジュール',
   'カテゴリ',
   '備考'
 ];
@@ -58,7 +57,7 @@ function api_list(params) {
     ? Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM')
     : inspectMonthRaw;
 
-  const sh = getSS_('Display').getSheetByName(cfg.sheetName);
+  const sh = getSS_('Project').getSheetByName(cfg.sheetName);
   if (!sh) {
     return { ok: false, error: 'シートが見つかりません: ' + cfg.sheetName };
   }

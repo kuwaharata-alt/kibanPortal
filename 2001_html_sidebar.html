@@ -7,30 +7,30 @@
   <div class="sb-menu">
     <!-- ===== ホーム ===== -->
     <div class="sb-section">🏠HOME</div>
-    <button type="button" class="nav-btn" data-panel="panel-dashboard" onclick="navTo(this)">ダッシュボード</button>
-    <button type="button" class="nav-btn" data-panel="panel-info" onclick="navTo(this)">Information</button>
+    <button type="button" class="nav-btn" data-auth-key="dashboard" data-panel="panel-dashboard" onclick="navTo(this)">ダッシュボード</button>
+    <button type="button" class="nav-btn" data-auth-key="info" data-panel="panel-info" onclick="navTo(this)">Information</button>
 
     <!-- ===== 案件管理 ===== -->
     <div class="sb-section">📋PROJECT</div>
-    <button type="button" class="nav-btn" data-panel="panel-list" data-type="SV" onclick="navTo(this)">SV案件管理表</button>
-    <button type="button" class="nav-btn" data-panel="panel-list" data-type="CL" onclick="navTo(this)">CL案件管理表</button>
-    <button type="button" class="nav-btn" data-panel="panel-wbs" onclick="navTo(this)">案件スケジュール</button>
+    <button type="button" class="nav-btn" data-auth-key="project_sv" data-panel="panel-list" data-type="SV" onclick="navTo(this)">SV案件管理表</button>
+    <button type="button" class="nav-btn" data-auth-key="project_cl" data-panel="panel-list" data-type="CL" onclick="navTo(this)">CL案件管理表</button>
+    <button type="button" class="nav-btn" data-auth-key="project_wbs" data-panel="panel-wbs" onclick="navTo(this)">案件スケジュール</button>
 
     <!-- ===== タスク/稼働 ===== -->
     <div class="sb-section">📆TASKS &amp; WORKLOAD</div>
-    <button type="button" class="nav-btn" data-panel="panel-task" onclick="navTo(this)">社内タスク</button>
-    <button type="button" class="nav-btn" data-panel="panel-plan" onclick="navTo(this)">予定管理表</button>
-    <button type="button" class="nav-btn" data-panel="panel-operation" onclick="navTo(this)">稼働状況</button>
+    <button type="button" class="nav-btn" data-auth-key="task" data-panel="panel-task" onclick="navTo(this)">社内タスク</button>
+    <button type="button" class="nav-btn" data-auth-key="plan" data-panel="panel-plan" onclick="navTo(this)">予定管理表</button>
+    <button type="button" class="nav-btn" data-auth-key="operation" data-panel="panel-operation" onclick="navTo(this)">稼働状況</button>
 
     <!-- ===== Knowledge ===== -->
     <div class="sb-section">📔KNOWLEDGE</div>
-    <button type="button" class="nav-btn" data-panel="panel-link" onclick="navTo(this)">リンク一覧</button>
-    <button type="button" class="nav-btn" data-panel="panel-manual" onclick="navTo(this)">マニュアル</button>
-    <button type="button" class="nav-btn" data-panel="panel-dictionary" onclick="navTo(this)">案件ディクショナリ</button>
-    <button type="button" class="nav-btn" data-panel="panel-rule" onclick="navTo(this)">基盤Grルール</button>
+    <button type="button" class="nav-btn" data-auth-key="link" data-panel="panel-link" onclick="navTo(this)">リンク一覧</button>
+    <button type="button" class="nav-btn" data-auth-key="manual" data-panel="panel-manual" onclick="navTo(this)">マニュアル</button>
+    <button type="button" class="nav-btn" data-auth-key="dictionary" data-panel="panel-dictionary" onclick="navTo(this)">案件ディクショナリ</button>
+    <button type="button" class="nav-btn" data-auth-key="rule" data-panel="panel-rule" onclick="navTo(this)">基盤Grルール</button>
 
     <!-- ===== その他 ===== -->
     <div class="sb-section">⚙️SYSTEM</div>
-    <button type="button" class="nav-btn" data-panel="panel-setting" onclick="navTo(this)">設定</button>
+    <button type="button" class="nav-btn" data-auth-key="setting" data-panel="panel-setting" onclick="navTo(this)">設定</button>
   </div>
 </aside>

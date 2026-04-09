@@ -7,6 +7,7 @@ function getSS_(key) {
 
   const map = {
     Display: '1f3Q0d3G4wEatiT_xK6hXKodoa52r5iDFG5q18iKHPFY', // Portal
+    Project: '1czr0sPRCiAi9y0Yi-Dya4K5g-VLDlZFAEuZH63KWPKU', //案件管理表v3
     DB: '1y8jni2p9dg-UTP-L8rVOHJG9iZEU3A72tAW89rQdqaU', // DB
     Link: '1BDprrzWMRp96HhSi-_PqJwci26Hbpn8qjMPcJJf6nrg', // リンク集
     Rule: '1DYyx0fWAjxR9_4Gw7tPyZg-LJjSQ7qmnW0LRSVpWg2c', // 基盤ルール
@@ -138,6 +139,101 @@ function getActiveUserNameOrEmail_() {
   return out;
 }
 
+/** ======================================================================
+ *   アクセス指定
+ *  ====================================================================== */
+
+function api_getMenuAuth() {
+  try {
+    const email = String(Session.getActiveUser().getEmail() || '')
+      .trim()
+      .toLowerCase();
+
+    const ss = getSS_('Display');
+
+    const shAuth = ss.getSheetByName('タブ');        // ← 権限設定
+    const shAccess = ss.getSheetByName('アクセス権'); // ← 1枚に統合
+
+    if (!shAuth) throw new Error('タブシートがない');
+    if (!shAccess) throw new Error('アクセス権シートがない');
+
+    // =============================
+    // アクセス権判定
+    // =============================
+    const accessValues = shAccess.getDataRange().getDisplayValues();
+
+    const headers = accessValues[0];
+    const colMap = {};
+    headers.forEach((h, i) => colMap[h] = i);
+
+    const idxMail = colMap['メールアドレス'];
+    const idxAdmin = colMap['管理者'];
+    const idxUser = colMap['ユーザー'];
+
+    let isAdmin = false;
+    let isUser = false;
+
+    for (let i = 1; i < accessValues.length; i++) {
+      const row = accessValues[i];
+      const mail = String(row[idxMail] || '').trim().toLowerCase();
+
+      if (mail !== email) continue;
+
+      if (row[idxAdmin] === '○') isAdmin = true;
+      if (row[idxUser] === '○') isUser = true;
+      break;
+    }
+
+    // =============================
+    // 権限設定
+    // =============================
+    const values = shAuth.getDataRange().getDisplayValues();
+
+    const h = values[0];
+    const map = {};
+    h.forEach((v, i) => map[v] = i);
+
+    const allowedKeys = [];
+
+    for (let i = 1; i < values.length; i++) {
+      const row = values[i];
+
+      const key = row[map['項目']];
+      if (!key) continue;
+
+      const adminFlag = row[map['管理者']] === '○';
+      const userFlag = row[map['ユーザー']] === '○';
+
+      const customRaw = row[map['カスタム列']];
+      const customList = String(customRaw || '')
+        .split(/[,\n、]/)
+        .map(v => v.trim().toLowerCase())
+        .filter(Boolean);
+
+      const allow =
+        (adminFlag && isAdmin) ||
+        (userFlag && isUser) ||
+        customList.includes(email);
+
+      if (allow) allowedKeys.push(key);
+    }
+
+    return {
+      ok: true,
+      email,
+      isAdmin,
+      isUser,
+      allowedKeys
+    };
+
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message,
+      allowedKeys: []
+    };
+  }
+}
 
 /** ======================================================================
  *   祝日取得
